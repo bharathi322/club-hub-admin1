@@ -113,6 +113,15 @@ const FacultyAttendance = () => {
               Mark {selectedIds.size} as Attended
             </Button>
           )}
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={handleExportCSV}
+            disabled={!filtered.length}
+          >
+            <Download className="h-4 w-4" />
+            Export CSV
+          </Button>
           <Select value={selectedEvent} onValueChange={(v) => { setSelectedEvent(v); setSelectedIds(new Set()); }}>
             <SelectTrigger className="w-[220px]">
               <SelectValue placeholder="Filter by event" />
