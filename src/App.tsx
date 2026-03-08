@@ -20,6 +20,7 @@ import NotFound from "./pages/NotFound";
 import StudentEvents from "./pages/student/StudentEvents";
 import StudentClubs from "./pages/student/StudentClubs";
 import StudentMyRegistrations from "./pages/student/StudentMyRegistrations";
+import StudentProfile from "./pages/student/StudentProfile";
 
 // Faculty pages
 import FacultyDashboard from "./pages/faculty/FacultyDashboard";
