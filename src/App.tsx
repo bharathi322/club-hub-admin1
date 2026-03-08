@@ -20,6 +20,7 @@ import NotFound from "./pages/NotFound";
 import StudentEvents from "./pages/student/StudentEvents";
 import StudentClubs from "./pages/student/StudentClubs";
 import StudentMyRegistrations from "./pages/student/StudentMyRegistrations";
+import StudentProfile from "./pages/student/StudentProfile";
 
 // Faculty pages
 import FacultyDashboard from "./pages/faculty/FacultyDashboard";
@@ -62,6 +63,7 @@ const App = () => (
             <Route path="/student/events" element={<ProtectedRoute><RoleRoute allowedRoles={["student"]}><DashboardLayout><StudentEvents /></DashboardLayout></RoleRoute></ProtectedRoute>} />
             <Route path="/student/clubs" element={<ProtectedRoute><RoleRoute allowedRoles={["student"]}><DashboardLayout><StudentClubs /></DashboardLayout></RoleRoute></ProtectedRoute>} />
             <Route path="/student/registrations" element={<ProtectedRoute><RoleRoute allowedRoles={["student"]}><DashboardLayout><StudentMyRegistrations /></DashboardLayout></RoleRoute></ProtectedRoute>} />
+            <Route path="/student/profile" element={<ProtectedRoute><RoleRoute allowedRoles={["student"]}><DashboardLayout><StudentProfile /></DashboardLayout></RoleRoute></ProtectedRoute>} />
 
             {/* Faculty routes */}
             <Route path="/faculty" element={<ProtectedRoute><RoleRoute allowedRoles={["faculty"]}><DashboardLayout><FacultyDashboard /></DashboardLayout></RoleRoute></ProtectedRoute>} />

@@ -83,4 +83,27 @@ router.get("/my-registrations", auth, async (req, res) => {
   }
 });
 
+// GET /api/student/my-feedback — all feedback given by student
+router.get("/my-feedback", auth, async (req, res) => {
+  try {
+    const feedback = await Feedback.find({ student: req.user.id }).sort({ createdAt: -1 });
+    // Populate target names
+    const enriched = [];
+    for (const fb of feedback) {
+      const obj = fb.toObject();
+      if (fb.targetType === "club") {
+        const club = await Club.findById(fb.targetId).select("name");
+        obj.targetName = club?.name || "Unknown Club";
+      } else {
+        const event = await Event.findById(fb.targetId).select("name");
+        obj.targetName = event?.name || "Unknown Event";
+      }
+      enriched.push(obj);
+    }
+    res.json(enriched);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 module.exports = router;
