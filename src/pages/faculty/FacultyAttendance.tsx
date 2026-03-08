@@ -4,26 +4,47 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useFacultyEvents, useFacultyRegistrations } from "@/hooks/use-dashboard-api";
-import { useMarkAttendance } from "@/hooks/use-mutations";
+import { useMarkAttendance, useBulkMarkAttendance } from "@/hooks/use-mutations";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { CheckCircle, Users } from "lucide-react";
+import { CheckCircle, Users, CheckCheck } from "lucide-react";
 
 const FacultyAttendance = () => {
   const { data: events, isLoading: eventsLoading } = useFacultyEvents();
   const { data: registrations, isLoading: regsLoading } = useFacultyRegistrations();
   const markAttendance = useMarkAttendance();
+  const bulkMark = useBulkMarkAttendance();
   const { toast } = useToast();
   const [selectedEvent, setSelectedEvent] = useState<string>("all");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const filtered = registrations?.filter(
     (r: any) => selectedEvent === "all" || r.event?._id === selectedEvent
   ) ?? [];
 
   const attendedCount = filtered.filter((r: any) => r.status === "attended").length;
+  const unattendedFiltered = filtered.filter((r: any) => r.status !== "attended");
+
+  const allSelected = unattendedFiltered.length > 0 && unattendedFiltered.every((r: any) => selectedIds.has(r._id));
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(unattendedFiltered.map((r: any) => r._id)));
+    }
+  };
 
   const handleToggle = (reg: any) => {
     const newStatus = reg.status === "attended" ? "registered" : "attended";
@@ -36,7 +57,23 @@ const FacultyAttendance = () => {
     );
   };
 
+  const handleBulkMark = () => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+    bulkMark.mutate(
+      { ids, status: "attended" },
+      {
+        onSuccess: (data: any) => {
+          toast({ title: `${data.count ?? ids.length} students marked as attended` });
+          setSelectedIds(new Set());
+        },
+        onError: (err: any) => toast({ title: "Error", description: err.response?.data?.message || "Failed", variant: "destructive" }),
+      }
+    );
+  };
+
   const isLoading = eventsLoading || regsLoading;
+  const isBusy = markAttendance.isPending || bulkMark.isPending;
 
   return (
     <div className="p-6 space-y-6">
@@ -45,17 +82,29 @@ const FacultyAttendance = () => {
           <h1 className="text-2xl font-bold text-foreground">Attendance Tracking</h1>
           <p className="text-sm text-muted-foreground">Mark students as attended for your club's events</p>
         </div>
-        <Select value={selectedEvent} onValueChange={setSelectedEvent}>
-          <SelectTrigger className="w-[220px]">
-            <SelectValue placeholder="Filter by event" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Events</SelectItem>
-            {events?.map((e: any) => (
-              <SelectItem key={e._id} value={e._id}>{e.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-3">
+          {selectedIds.size > 0 && (
+            <Button
+              className="gap-2 bg-gradient-primary border-0 hover:opacity-90"
+              onClick={handleBulkMark}
+              disabled={isBusy}
+            >
+              <CheckCheck className="h-4 w-4" />
+              Mark {selectedIds.size} as Attended
+            </Button>
+          )}
+          <Select value={selectedEvent} onValueChange={(v) => { setSelectedEvent(v); setSelectedIds(new Set()); }}>
+            <SelectTrigger className="w-[220px]">
+              <SelectValue placeholder="Filter by event" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Events</SelectItem>
+              {events?.map((e: any) => (
+                <SelectItem key={e._id} value={e._id}>{e.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Stats */}
@@ -102,7 +151,14 @@ const FacultyAttendance = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-12">Attended</TableHead>
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={allSelected}
+                        onCheckedChange={toggleSelectAll}
+                        disabled={isBusy || unattendedFiltered.length === 0}
+                        aria-label="Select all unattended"
+                      />
+                    </TableHead>
                     <TableHead>Student</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Event</TableHead>
@@ -110,28 +166,39 @@ const FacultyAttendance = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((reg: any) => (
-                    <TableRow key={reg._id}>
-                      <TableCell>
-                        <Checkbox
-                          checked={reg.status === "attended"}
-                          onCheckedChange={() => handleToggle(reg)}
-                          disabled={markAttendance.isPending}
-                        />
-                      </TableCell>
-                      <TableCell className="font-medium">{reg.student?.name ?? "—"}</TableCell>
-                      <TableCell className="text-muted-foreground">{reg.student?.email ?? "—"}</TableCell>
-                      <TableCell>{reg.event?.name ?? "—"}</TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={reg.status === "attended" ? "default" : "secondary"}
-                          className="capitalize"
-                        >
-                          {reg.status}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {filtered.map((reg: any) => {
+                    const isAttended = reg.status === "attended";
+                    return (
+                      <TableRow key={reg._id} className={selectedIds.has(reg._id) ? "bg-accent/30" : ""}>
+                        <TableCell>
+                          {isAttended ? (
+                            <Checkbox
+                              checked
+                              onCheckedChange={() => handleToggle(reg)}
+                              disabled={isBusy}
+                            />
+                          ) : (
+                            <Checkbox
+                              checked={selectedIds.has(reg._id)}
+                              onCheckedChange={() => toggleSelect(reg._id)}
+                              disabled={isBusy}
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell className="font-medium">{reg.student?.name ?? "—"}</TableCell>
+                        <TableCell className="text-muted-foreground">{reg.student?.email ?? "—"}</TableCell>
+                        <TableCell>{reg.event?.name ?? "—"}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={isAttended ? "default" : "secondary"}
+                            className="capitalize"
+                          >
+                            {reg.status}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             ) : (

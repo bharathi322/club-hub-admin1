@@ -179,6 +179,18 @@ export const useMarkAttendance = () => {
   });
 };
 
+export const useBulkMarkAttendance = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ids, status }: { ids: string[]; status: string }) =>
+      api.patch("/faculty/registrations/bulk-attend", { ids, status }).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["facultyRegistrations"] });
+      qc.invalidateQueries({ queryKey: ["facultyStats"] });
+    },
+  });
+};
+
 export const useUpdateFacultyClub = () => {
   const qc = useQueryClient();
   return useMutation({

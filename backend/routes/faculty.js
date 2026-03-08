@@ -124,6 +124,27 @@ router.patch("/registrations/:id/attend", auth, facultyOnly, async (req, res) =>
   }
 });
 
+// PATCH /api/faculty/registrations/bulk-attend — mark multiple registrations
+router.patch("/registrations/bulk-attend", auth, facultyOnly, async (req, res) => {
+  try {
+    const { ids, status } = req.body;
+    if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ message: "No IDs provided" });
+    const club = await Club.findById(req.assignedClub);
+    const events = await Event.find({ club: club.name });
+    const eventIds = events.map(e => e._id.toString());
+    // Validate all registrations belong to this club
+    const regs = await EventRegistration.find({ _id: { $in: ids } }).populate("event");
+    const valid = regs.filter(r => eventIds.includes(r.event._id.toString()));
+    if (!valid.length) return res.status(403).json({ message: "No valid registrations" });
+    const validIds = valid.map(r => r._id);
+    const newStatus = status === "registered" ? "registered" : "attended";
+    await EventRegistration.updateMany({ _id: { $in: validIds } }, { status: newStatus });
+    res.json({ message: `${validIds.length} registrations updated`, count: validIds.length });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // GET /api/faculty/feedback — feedback for the club and its events
 router.get("/feedback", auth, facultyOnly, async (req, res) => {
   try {
