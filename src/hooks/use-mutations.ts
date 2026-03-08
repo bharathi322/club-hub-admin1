@@ -150,6 +150,23 @@ export const useDeleteFacultyEvent = () => {
   });
 };
 
+// Notification mutations
+export const useMarkNotificationRead = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.patch(`/notifications/${id}/read`).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+};
+
+export const useMarkAllNotificationsRead = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.patch("/notifications/read-all").then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+};
+
 export const useMarkAttendance = () => {
   const qc = useQueryClient();
   return useMutation({

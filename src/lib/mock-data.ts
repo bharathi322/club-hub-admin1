@@ -124,3 +124,11 @@ export function getMockCalendarEvents(date: string): CalendarDayEvents {
     events: mockCalendarEvents[date] || [],
   };
 }
+
+export const mockNotifications: AppNotification[] = [
+  { _id: "n1", user: "demo", title: "New Event Posted", description: '"Workshop: AI Basics" by Coding Club on 2026-04-02', type: "info", read: false, createdAt: "2026-03-08T10:00:00Z" },
+  { _id: "n2", user: "demo", title: "Event Status Updated", description: '"Annual Robo Wars" changed from pending to approved', type: "success", read: false, createdAt: "2026-03-07T14:30:00Z" },
+  { _id: "n3", user: "demo", title: "New Event Posted", description: '"Drama Festival" by Drama Society on 2026-04-05', type: "info", read: false, createdAt: "2026-03-06T09:00:00Z" },
+  { _id: "n4", user: "demo", title: "Event Status Updated", description: '"Photo Walk" changed from pending to warning', type: "warning", read: true, createdAt: "2026-03-05T16:00:00Z" },
+  { _id: "n5", user: "demo", title: "New Event Posted", description: '"Open Mic Night" by Music Club on 2026-03-22', type: "info", read: true, createdAt: "2026-03-04T11:00:00Z" },
+];
