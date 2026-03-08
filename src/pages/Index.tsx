@@ -7,6 +7,7 @@ import EventsChart from "@/components/dashboard/EventsChart";
 import EventsTable from "@/components/dashboard/EventsTable";
 import ComplaintsFeed from "@/components/dashboard/ComplaintsFeed";
 import MediaBudget from "@/components/dashboard/MediaBudget";
+import DayFlowCalendar from "@/components/dashboard/DayFlowCalendar";
 import { motion } from "framer-motion";
 
 const Index = () => {
