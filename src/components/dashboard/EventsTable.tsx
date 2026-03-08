@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Plus, Pencil, Trash2, Search, CalendarIcon, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, CalendarIcon, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEvents, useClubs } from "@/hooks/use-dashboard-api";
 import { useCreateEvent, useUpdateEvent, useDeleteEvent } from "@/hooks/use-mutations";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,6 +23,8 @@ const statusVariant: Record<string, "default" | "secondary" | "destructive"> = {
   pending: "secondary",
   warning: "destructive",
 };
+
+const PAGE_SIZE_OPTIONS = [5, 10, 25, 50];
 
 const EventsTable = () => {
   const { data: events, isLoading } = useEvents();
@@ -44,6 +46,10 @@ const EventsTable = () => {
   const [dateFrom, setDateFrom] = useState<Date | undefined>();
   const [dateTo, setDateTo] = useState<Date | undefined>();
 
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
   const filteredEvents = useMemo(() => {
     if (!events) return [];
     return events.filter((e) => {
@@ -55,6 +61,16 @@ const EventsTable = () => {
       return true;
     });
   }, [events, search, clubFilter, statusFilter, dateFrom, dateTo]);
+
+  // Reset page when filters change
+  const totalPages = Math.max(1, Math.ceil(filteredEvents.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  if (safePage !== page) setPage(safePage);
+
+  const paginatedEvents = useMemo(() => {
+    const start = (safePage - 1) * pageSize;
+    return filteredEvents.slice(start, start + pageSize);
+  }, [filteredEvents, safePage, pageSize]);
 
   const uniqueClubs = useMemo(() => {
     if (clubs?.length) return clubs.map((c) => c.name);
@@ -70,6 +86,7 @@ const EventsTable = () => {
     setStatusFilter("all");
     setDateFrom(undefined);
     setDateTo(undefined);
+    setPage(1);
   };
 
   const handleSubmit = (data: Partial<Event> & { id?: string }) => {
@@ -122,11 +139,11 @@ const EventsTable = () => {
               <Input
                 placeholder="Search events..."
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                 className="pl-8 h-9 text-sm"
               />
             </div>
-            <Select value={clubFilter} onValueChange={setClubFilter}>
+            <Select value={clubFilter} onValueChange={(v) => { setClubFilter(v); setPage(1); }}>
               <SelectTrigger className="w-[140px] h-9 text-sm">
                 <SelectValue placeholder="All Clubs" />
               </SelectTrigger>
@@ -137,7 +154,7 @@ const EventsTable = () => {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
               <SelectTrigger className="w-[130px] h-9 text-sm">
                 <SelectValue placeholder="All Status" />
               </SelectTrigger>
@@ -156,7 +173,7 @@ const EventsTable = () => {
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
-                <Calendar mode="single" selected={dateFrom} onSelect={setDateFrom} initialFocus className="p-3 pointer-events-auto" />
+                <Calendar mode="single" selected={dateFrom} onSelect={(d) => { setDateFrom(d); setPage(1); }} initialFocus className="p-3 pointer-events-auto" />
               </PopoverContent>
             </Popover>
             <Popover>
@@ -167,7 +184,7 @@ const EventsTable = () => {
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
-                <Calendar mode="single" selected={dateTo} onSelect={setDateTo} initialFocus className="p-3 pointer-events-auto" />
+                <Calendar mode="single" selected={dateTo} onSelect={(d) => { setDateTo(d); setPage(1); }} initialFocus className="p-3 pointer-events-auto" />
               </PopoverContent>
             </Popover>
             {hasActiveFilters && (
@@ -180,7 +197,8 @@ const EventsTable = () => {
           {/* Results count */}
           {!isLoading && events && (
             <p className="text-xs text-muted-foreground">
-              Showing {filteredEvents.length} of {events.length} events
+              Showing {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, filteredEvents.length)} of {filteredEvents.length} events
+              {hasActiveFilters && ` (${events.length} total)`}
             </p>
           )}
 
@@ -198,7 +216,7 @@ const EventsTable = () => {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                Array.from({ length: 3 }).map((_, i) => (
+                Array.from({ length: pageSize }).map((_, i) => (
                   <TableRow key={i}>
                     <TableCell><Skeleton className="h-4 w-32" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-24" /></TableCell>
@@ -208,8 +226,8 @@ const EventsTable = () => {
                     <TableCell><Skeleton className="h-4 w-12 ml-auto" /></TableCell>
                   </TableRow>
                 ))
-              ) : filteredEvents.length ? (
-                filteredEvents.map((e) => (
+              ) : paginatedEvents.length ? (
+                paginatedEvents.map((e) => (
                   <TableRow key={e._id}>
                     <TableCell className="font-medium">{e.name}</TableCell>
                     <TableCell className="text-muted-foreground">{e.club}</TableCell>
@@ -239,6 +257,49 @@ const EventsTable = () => {
               )}
             </TableBody>
           </Table>
+
+          {/* Pagination */}
+          {!isLoading && filteredEvents.length > 0 && (
+            <div className="flex items-center justify-between pt-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">Rows per page</span>
+                <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}>
+                  <SelectTrigger className="w-[70px] h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAGE_SIZE_OPTIONS.map((s) => (
+                      <SelectItem key={s} value={String(s)}>{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-muted-foreground mr-2">
+                  Page {safePage} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  disabled={safePage <= 1}
+                  onClick={() => setPage(safePage - 1)}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  disabled={safePage >= totalPages}
+                  onClick={() => setPage(safePage + 1)}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
