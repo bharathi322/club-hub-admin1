@@ -21,7 +21,7 @@ import StudentEvents from "./pages/student/StudentEvents";
 import StudentClubs from "./pages/student/StudentClubs";
 import StudentMyRegistrations from "./pages/student/StudentMyRegistrations";
 import StudentProfile from "./pages/student/StudentProfile";
-
+import StudentNotifications from "./pages/student/StudentNotifications";
 // Faculty pages
 import FacultyDashboard from "./pages/faculty/FacultyDashboard";
 import FacultyEvents from "./pages/faculty/FacultyEvents";
