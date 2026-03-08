@@ -12,6 +12,7 @@ import type {
   EventRegistration,
   Feedback,
   FacultyStats,
+  AppNotification,
 } from "@/types/api";
 
 export const mockClubs: Club[] = [
