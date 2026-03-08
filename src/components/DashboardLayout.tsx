@@ -1,7 +1,7 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { useAuth } from "@/contexts/AuthContext";
-import { Badge } from "@/components/ui/badge";
+import NotificationBell from "@/components/NotificationBell";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { isDemo } = useAuth();
@@ -16,8 +16,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               Demo Mode — using sample data
             </div>
           )}
-          <header className="h-12 flex items-center border-b bg-card px-4 shrink-0">
+          <header className="h-12 flex items-center justify-between border-b bg-card px-4 shrink-0">
             <SidebarTrigger className="mr-2" />
+            <NotificationBell />
           </header>
           <main className="flex-1 overflow-auto">
             {children}
