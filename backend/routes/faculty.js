@@ -59,6 +59,7 @@ router.post("/events", auth, facultyOnly, async (req, res) => {
   try {
     const club = await Club.findById(req.assignedClub);
     const event = await Event.create({ ...req.body, club: club.name });
+    notifyNewEvent(event);
     res.status(201).json(event);
   } catch (err) {
     res.status(500).json({ message: err.message });

@@ -29,8 +29,14 @@ router.post("/", auth, async (req, res) => {
 // PUT /api/events/:id
 router.put("/:id", auth, async (req, res) => {
   try {
+    const existing = await Event.findById(req.params.id);
+    if (!existing) return res.status(404).json({ message: "Event not found" });
+    const oldStatus = existing.status;
     const event = await Event.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!event) return res.status(404).json({ message: "Event not found" });
+    // Notify registered students if status changed
+    if (req.body.status && req.body.status !== oldStatus) {
+      notifyEventStatusChange(event, oldStatus);
+    }
     res.json(event);
   } catch (err) {
     res.status(500).json({ message: err.message });
