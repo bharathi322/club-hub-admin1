@@ -13,6 +13,7 @@ import Events from "./pages/Events";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
+import FacultyAssignment from "./pages/FacultyAssignment";
 import NotFound from "./pages/NotFound";
 
 // Student pages
@@ -55,6 +56,7 @@ const App = () => (
             <Route path="/events" element={<ProtectedRoute><RoleRoute allowedRoles={["admin"]}><DashboardLayout><Events /></DashboardLayout></RoleRoute></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><RoleRoute allowedRoles={["admin"]}><DashboardLayout><Reports /></DashboardLayout></RoleRoute></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><RoleRoute allowedRoles={["admin"]}><DashboardLayout><Settings /></DashboardLayout></RoleRoute></ProtectedRoute>} />
+            <Route path="/faculty-assignment" element={<ProtectedRoute><RoleRoute allowedRoles={["admin"]}><DashboardLayout><FacultyAssignment /></DashboardLayout></RoleRoute></ProtectedRoute>} />
 
             {/* Student routes */}
             <Route path="/student/events" element={<ProtectedRoute><RoleRoute allowedRoles={["student"]}><DashboardLayout><StudentEvents /></DashboardLayout></RoleRoute></ProtectedRoute>} />

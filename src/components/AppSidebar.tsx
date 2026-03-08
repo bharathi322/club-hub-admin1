@@ -35,6 +35,7 @@ const adminNav = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Clubs", url: "/clubs", icon: Users },
   { title: "Events", url: "/events", icon: CalendarDays },
+  { title: "Faculty", url: "/faculty-assignment", icon: GraduationCap },
   { title: "Reports", url: "/reports", icon: FileText },
   { title: "Settings", url: "/settings", icon: Settings },
 ];

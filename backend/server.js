@@ -10,6 +10,7 @@ const complaintRoutes = require("./routes/complaints");
 const dashboardRoutes = require("./routes/dashboard");
 const studentRoutes = require("./routes/student");
 const facultyRoutes = require("./routes/faculty");
+const adminRoutes = require("./routes/admin");
 
 const app = express();
 
@@ -24,6 +25,7 @@ app.use("/api/complaints", complaintRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/student", studentRoutes);
 app.use("/api/faculty", facultyRoutes);
+app.use("/api/admin", adminRoutes);
 
 // Connect to MongoDB and start server
 const PORT = process.env.PORT || 5000;
