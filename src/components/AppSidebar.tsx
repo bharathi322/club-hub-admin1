@@ -44,6 +44,7 @@ const studentNav = [
   { title: "Events", url: "/student/events", icon: CalendarDays },
   { title: "Clubs", url: "/student/clubs", icon: Users },
   { title: "My Registrations", url: "/student/registrations", icon: ClipboardList },
+  { title: "Profile", url: "/student/profile", icon: GraduationCap },
 ];
 
 const facultyNav = [
