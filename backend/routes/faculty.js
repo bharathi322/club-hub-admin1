@@ -6,6 +6,7 @@ const EventRegistration = require("../models/EventRegistration");
 const Feedback = require("../models/Feedback");
 const Complaint = require("../models/Complaint");
 const auth = require("../middleware/auth");
+const { notifyNewEvent, notifyEventStatusChange } = require("../helpers/notifications");
 const router = express.Router();
 
 // Middleware: ensure faculty & get assigned club
