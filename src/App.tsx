@@ -13,6 +13,7 @@ import Events from "./pages/Events";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
+import FacultyAssignment from "./pages/FacultyAssignment";
 import NotFound from "./pages/NotFound";
 
 // Student pages
