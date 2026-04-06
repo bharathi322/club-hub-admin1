@@ -10,10 +10,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Badge } from "@/components/ui/badge";
 
 export default function UserProfileDropdown() {
-  const { user, isDemo, logout } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
 
   const initials = (user?.name ?? "U")
@@ -37,11 +36,6 @@ export default function UserProfileDropdown() {
         <DropdownMenuLabel className="font-normal space-y-1">
           <p className="text-sm font-medium">{user?.name}</p>
           <p className="text-xs text-muted-foreground">{user?.email}</p>
-          {isDemo && (
-            <Badge variant="secondary" className="text-[10px] h-4 mt-1">
-              Demo
-            </Badge>
-          )}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => navigate("/settings")} className="cursor-pointer">

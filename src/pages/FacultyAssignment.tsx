@@ -1,7 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@/contexts/AuthContext";
 import api from "@/lib/api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -14,7 +13,7 @@ import { UserCog, GraduationCap, Plus, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState } from "react";
 import type { Club } from "@/types/api";
-import { mockClubs } from "@/lib/mock-data";
+import { useClubs } from "@/hooks/use-dashboard-api";
 
 interface FacultyUser {
   _id: string;
@@ -23,14 +22,7 @@ interface FacultyUser {
   assignedClub: { _id: string; name: string } | null;
 }
 
-const mockFacultyUsers: FacultyUser[] = [
-  { _id: "f1", name: "Dr. Sarah Wilson", email: "sarah@college.edu", assignedClub: { _id: "c1", name: "Robotics Club" } },
-  { _id: "f2", name: "Prof. James Lee", email: "james@college.edu", assignedClub: null },
-  { _id: "f3", name: "Dr. Emily Chen", email: "emily@college.edu", assignedClub: { _id: "c4", name: "Music Club" } },
-];
-
 const FacultyAssignment = () => {
-  const { isDemo } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -42,23 +34,14 @@ const FacultyAssignment = () => {
 
   const { data: faculty, isLoading: facultyLoading } = useQuery<FacultyUser[]>({
     queryKey: ["adminFaculty"],
-    queryFn: isDemo
-      ? () => Promise.resolve(mockFacultyUsers)
-      : async () => (await api.get("/admin/faculty")).data,
+    queryFn: async () => (await api.get("/admin/faculty")).data,
   });
 
-  const { data: clubs, isLoading: clubsLoading } = useQuery<Club[]>({
-    queryKey: ["clubs"],
-    queryFn: isDemo
-      ? () => Promise.resolve(mockClubs)
-      : async () => (await api.get("/clubs")).data,
-  });
+  const { data: clubs, isLoading: clubsLoading } = useClubs();
 
   const assignMutation = useMutation({
     mutationFn: ({ facultyId, clubId }: { facultyId: string; clubId: string | null }) =>
-      isDemo
-        ? Promise.resolve({})
-        : api.put(`/admin/faculty/${facultyId}/assign`, { clubId }).then(r => r.data),
+      api.put(`/admin/faculty/${facultyId}/assign`, { clubId }).then(r => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["adminFaculty"] });
       toast({ title: "Club assignment updated" });
@@ -68,9 +51,7 @@ const FacultyAssignment = () => {
 
   const createMutation = useMutation({
     mutationFn: (data: { name: string; email: string; password: string; clubId?: string }) =>
-      isDemo
-        ? Promise.resolve({})
-        : api.post("/admin/faculty", data).then(r => r.data),
+      api.post("/admin/faculty", data).then(r => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["adminFaculty"] });
       toast({ title: "Faculty account created" });
@@ -178,7 +159,6 @@ const FacultyAssignment = () => {
         </Card>
       </motion.div>
 
-      {/* Create Faculty Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>

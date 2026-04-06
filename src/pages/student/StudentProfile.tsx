@@ -10,7 +10,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
-import { mockMyRegistrations } from "@/lib/mock-data";
 
 interface StudentFeedback {
   _id: string;
@@ -22,12 +21,6 @@ interface StudentFeedback {
   createdAt: string;
 }
 
-const mockFeedbackHistory: StudentFeedback[] = [
-  { _id: "sf1", targetType: "club", targetId: "c1", targetName: "Robotics Club", rating: 5, comment: "Amazing club with great activities!", createdAt: "2026-03-06T10:00:00Z" },
-  { _id: "sf2", targetType: "event", targetId: "e1", targetName: "Annual Robo Wars", rating: 4, comment: "Well organized event", createdAt: "2026-03-05T14:00:00Z" },
-  { _id: "sf3", targetType: "club", targetId: "c4", targetName: "Music Club", rating: 5, comment: "Love the open mic nights", createdAt: "2026-03-03T09:00:00Z" },
-];
-
 const renderStars = (rating: number) => (
   <span className="flex gap-0.5">
     {[1, 2, 3, 4, 5].map((s) => (
@@ -37,14 +30,12 @@ const renderStars = (rating: number) => (
 );
 
 const StudentProfile = () => {
-  const { user, isDemo } = useAuth();
+  const { user } = useAuth();
   const { data: registrations, isLoading: regsLoading } = useMyRegistrations();
 
   const { data: feedbackHistory, isLoading: fbLoading } = useQuery<StudentFeedback[]>({
     queryKey: ["myFeedback"],
-    queryFn: isDemo
-      ? () => Promise.resolve(mockFeedbackHistory)
-      : async () => (await api.get("/student/my-feedback")).data,
+    queryFn: async () => (await api.get("/student/my-feedback")).data,
   });
 
   const initials = (user?.name ?? "U")
@@ -56,7 +47,6 @@ const StudentProfile = () => {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Profile Header */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
         <Card className="shadow-card">
           <CardContent className="pt-6">
@@ -85,7 +75,6 @@ const StudentProfile = () => {
         </Card>
       </motion.div>
 
-      {/* Tabs */}
       <Tabs defaultValue="registrations">
         <TabsList className="grid w-full grid-cols-2 max-w-md">
           <TabsTrigger value="registrations" className="gap-1.5">
