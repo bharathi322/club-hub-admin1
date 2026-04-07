@@ -8,10 +8,18 @@ const eventSchema = new mongoose.Schema({
   date: { type: String, required: true },
   time: { type: String, required: true },
   description: { type: String, default: "" },
+  maxSeats: { type: Number, default: 0 },         // 0 = unlimited
   budgetUsed: { type: Number, default: 0 },
-  budgetProof: [{ type: String }],   // file paths for budget receipts
-  photos: [{ type: String }],        // event photos uploaded by faculty
-  documents: [{ type: String }],     // event documents/reports
+  budgetProof: [{ type: String }],
+  photos: [{ type: String }],
+  documents: [{ type: String }],
+  proofStatus: {
+    type: String,
+    enum: ["pending", "submitted", "approved", "rejected"],
+    default: "pending",
+  },
+  proofRemarks: { type: String, default: "" },
+  qrCode: { type: String, default: "" },           // unique QR token for attendance
 }, { timestamps: true });
 
 module.exports = mongoose.model("Event", eventSchema);

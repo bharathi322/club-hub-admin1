@@ -8,7 +8,7 @@ export interface SignupCredentials {
   name: string;
   email: string;
   password: string;
-  role?: "student" | "faculty";
+  role?: "student";
 }
 
 export interface AuthResponse {
@@ -21,6 +21,7 @@ export interface User {
   name: string;
   email: string;
   role: "admin" | "faculty" | "student";
+  mustChangePassword?: boolean;
 }
 
 // Clubs
@@ -30,6 +31,7 @@ export interface Club {
   status: "healthy" | "critical" | "warning";
   membersCount: number;
   rating: number;
+  budgetAllocated: number;
 }
 
 // Events
@@ -42,26 +44,33 @@ export interface Event {
   date: string;
   time: string;
   description?: string;
+  maxSeats?: number;
   budgetUsed?: number;
   budgetProof?: string[];
   photos?: string[];
   documents?: string[];
+  proofStatus?: "pending" | "submitted" | "approved" | "rejected";
+  proofRemarks?: string;
+  qrCode?: string;
   createdAt?: string;
   updatedAt?: string;
 }
 
-// Student event (with registration status)
+// Student event (with registration status + seats)
 export interface StudentEvent extends Event {
   registrationStatus: "registered" | "attended" | "cancelled" | null;
+  registeredCount?: number;
+  seatsRemaining?: number | null;
 }
 
 // Event Registration
 export interface EventRegistration {
   _id: string;
   event: Event;
-  student: string;
+  student: string | { _id: string; name: string; email: string };
   status: "registered" | "attended" | "cancelled";
   createdAt: string;
+  updatedAt?: string;
 }
 
 // Feedback
@@ -83,6 +92,7 @@ export interface FacultyStats {
   feedbackCount: number;
   clubRating: number;
   totalBudgetUsed?: number;
+  budgetAllocated?: number;
 }
 
 // Complaints
@@ -114,6 +124,15 @@ export interface BudgetData {
   budgetTotal: number;
   photosUploaded: number;
   reportsPending: number;
+}
+
+// Budget Overview (per club)
+export interface BudgetOverviewItem {
+  club: { _id: string; name: string };
+  faculty: { name: string; email: string } | null;
+  budgetAllocated: number;
+  budgetUsed: number;
+  eventCount: number;
 }
 
 // Chart data
@@ -153,4 +172,24 @@ export interface AppNotification {
 export interface ClubEventsResponse {
   club: Club;
   events: Event[];
+}
+
+// Live attendance
+export interface LiveAttendanceData {
+  total: number;
+  attended: number;
+  attendanceRate: number;
+  registrations: {
+    _id: string;
+    student: { _id: string; name: string; email: string };
+    status: string;
+    updatedAt: string;
+  }[];
+}
+
+// QR scan response
+export interface QRScanResponse {
+  message: string;
+  event: { _id: string; name: string; club: string };
+  status: string;
 }

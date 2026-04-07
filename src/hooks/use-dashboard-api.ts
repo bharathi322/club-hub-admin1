@@ -15,6 +15,8 @@ import type {
   Feedback,
   AppNotification,
   ClubEventsResponse,
+  BudgetOverviewItem,
+  LiveAttendanceData,
 } from "@/types/api";
 
 // Admin hooks
@@ -130,4 +132,27 @@ export const useAdminClubEvents = (clubId: string) =>
     queryKey: ["adminClubEvents", clubId],
     queryFn: async () => (await api.get(`/admin/clubs/${clubId}/events`)).data,
     enabled: !!clubId,
+  });
+
+// Admin: budget overview
+export const useBudgetOverview = () =>
+  useQuery<BudgetOverviewItem[]>({
+    queryKey: ["budgetOverview"],
+    queryFn: async () => (await api.get("/admin/budget-overview")).data,
+  });
+
+// Admin: faculty list
+export const useAdminFaculty = () =>
+  useQuery<any[]>({
+    queryKey: ["adminFaculty"],
+    queryFn: async () => (await api.get("/admin/faculty")).data,
+  });
+
+// Live attendance
+export const useLiveAttendance = (eventId: string) =>
+  useQuery<LiveAttendanceData>({
+    queryKey: ["liveAttendance", eventId],
+    queryFn: async () => (await api.get(`/attendance/${eventId}/live`)).data,
+    enabled: !!eventId,
+    refetchInterval: 5000, // Poll every 5s as fallback
   });

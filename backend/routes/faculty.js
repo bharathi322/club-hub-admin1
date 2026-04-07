@@ -7,7 +7,8 @@ const Feedback = require("../models/Feedback");
 const Complaint = require("../models/Complaint");
 const auth = require("../middleware/auth");
 const upload = require("../middleware/upload");
-const { notifyNewEvent, notifyEventStatusChange } = require("../helpers/notifications");
+const { notifyNewEvent, notifyEventStatusChange, notifyProofSubmitted, checkBudgetThreshold } = require("../helpers/notifications");
+const { recalculateClubHealth } = require("../helpers/clubHealth");
 const router = express.Router();
 
 // Middleware: ensure faculty & get assigned club
@@ -17,6 +18,7 @@ const facultyOnly = async (req, res, next) => {
     if (!user || user.role !== "faculty") return res.status(403).json({ message: "Faculty only" });
     if (!user.assignedClub) return res.status(403).json({ message: "No club assigned" });
     req.assignedClub = user.assignedClub;
+    req.facultyUser = user;
     next();
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -94,7 +96,7 @@ router.delete("/events/:id", auth, facultyOnly, async (req, res) => {
   }
 });
 
-// POST /api/faculty/events/:id/upload-photos — upload event photos
+// POST /api/faculty/events/:id/upload-photos
 router.post("/events/:id/upload-photos", auth, facultyOnly, (req, res, next) => {
   req.uploadSubDir = "photos";
   next();
@@ -112,7 +114,7 @@ router.post("/events/:id/upload-photos", auth, facultyOnly, (req, res, next) => 
   }
 });
 
-// POST /api/faculty/events/:id/upload-documents — upload event documents
+// POST /api/faculty/events/:id/upload-documents
 router.post("/events/:id/upload-documents", auth, facultyOnly, (req, res, next) => {
   req.uploadSubDir = "documents";
   next();
@@ -130,7 +132,7 @@ router.post("/events/:id/upload-documents", auth, facultyOnly, (req, res, next) 
   }
 });
 
-// POST /api/faculty/events/:id/upload-budget-proof — upload budget receipts
+// POST /api/faculty/events/:id/upload-budget-proof
 router.post("/events/:id/upload-budget-proof", auth, facultyOnly, (req, res, next) => {
   req.uploadSubDir = "budget-proofs";
   next();
@@ -145,13 +147,19 @@ router.post("/events/:id/upload-budget-proof", auth, facultyOnly, (req, res, nex
       event.budgetUsed = Number(req.body.budgetUsed);
     }
     await event.save();
+
+    // Check budget thresholds
+    const events = await Event.find({ club: club.name });
+    const totalUsed = events.reduce((sum, e) => sum + (e.budgetUsed || 0), 0);
+    await checkBudgetThreshold(club, totalUsed);
+
     res.json(event);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// PUT /api/faculty/events/:id/budget — update budget without files
+// PUT /api/faculty/events/:id/budget
 router.put("/events/:id/budget", auth, facultyOnly, async (req, res) => {
   try {
     const club = await Club.findById(req.assignedClub);
@@ -159,6 +167,26 @@ router.put("/events/:id/budget", auth, facultyOnly, async (req, res) => {
     if (!event || event.club !== club.name) return res.status(403).json({ message: "Not your club's event" });
     if (req.body.budgetUsed !== undefined) event.budgetUsed = Number(req.body.budgetUsed);
     await event.save();
+    res.json(event);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/faculty/events/:id/submit-proof — submit all proofs for admin review
+router.post("/events/:id/submit-proof", auth, facultyOnly, async (req, res) => {
+  try {
+    const club = await Club.findById(req.assignedClub);
+    const event = await Event.findById(req.params.id);
+    if (!event || event.club !== club.name) return res.status(403).json({ message: "Not your club's event" });
+
+    event.proofStatus = "submitted";
+    await event.save();
+
+    // Notify admin
+    const faculty = await User.findById(req.user.id);
+    await notifyProofSubmitted(faculty, club, event);
+
     res.json(event);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -252,6 +280,7 @@ router.get("/stats", auth, facultyOnly, async (req, res) => {
       feedbackCount,
       clubRating: club.rating,
       totalBudgetUsed,
+      budgetAllocated: club.budgetAllocated || 0,
     });
   } catch (err) {
     res.status(500).json({ message: err.message });

@@ -3,9 +3,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Pencil, Trash2, CalendarDays, Clock, Upload, Image, FileText, DollarSign } from "lucide-react";
+import { Plus, Pencil, Trash2, CalendarDays, Clock, Upload, Image, FileText, DollarSign, Send, CheckCircle, XCircle } from "lucide-react";
 import { useState, useRef } from "react";
-import { useFacultyEvents } from "@/hooks/use-dashboard-api";
+import { useFacultyEvents, useFacultyClub } from "@/hooks/use-dashboard-api";
 import {
   useCreateFacultyEvent,
   useUpdateFacultyEvent,
@@ -13,12 +13,14 @@ import {
   useUploadEventPhotos,
   useUploadEventDocuments,
   useUploadBudgetProof,
+  useSubmitProof,
 } from "@/hooks/use-mutations";
 import { Skeleton } from "@/components/ui/skeleton";
 import EventFormDialog from "@/components/dashboard/EventFormDialog";
 import DeleteConfirmDialog from "@/components/dashboard/DeleteConfirmDialog";
 import { useToast } from "@/hooks/use-toast";
 import type { Event } from "@/types/api";
+import { Progress } from "@/components/ui/progress";
 import { motion } from "framer-motion";
 import {
   Dialog,
@@ -29,21 +31,30 @@ import {
 } from "@/components/ui/dialog";
 
 const statusDot: Record<string, string> = {
-  approved: "bg-status-healthy",
-  pending: "bg-status-warning",
-  warning: "bg-status-critical",
+  approved: "bg-[hsl(var(--status-healthy))]",
+  pending: "bg-[hsl(var(--status-warning))]",
+  warning: "bg-[hsl(var(--status-critical))]",
+};
+
+const proofStatusColors: Record<string, string> = {
+  pending: "secondary",
+  submitted: "outline",
+  approved: "default",
+  rejected: "destructive",
 };
 
 const API_BASE = import.meta.env.VITE_API_URL?.replace("/api", "") || "http://localhost:5000";
 
 const FacultyEvents = () => {
   const { data: events, isLoading } = useFacultyEvents();
+  const { data: club } = useFacultyClub();
   const createEvent = useCreateFacultyEvent();
   const updateEvent = useUpdateFacultyEvent();
   const deleteEvent = useDeleteFacultyEvent();
   const uploadPhotos = useUploadEventPhotos();
   const uploadDocs = useUploadEventDocuments();
   const uploadBudget = useUploadBudgetProof();
+  const submitProof = useSubmitProof();
   const { toast } = useToast();
 
   const [formOpen, setFormOpen] = useState(false);
@@ -57,6 +68,11 @@ const FacultyEvents = () => {
   const [uploadType, setUploadType] = useState<"photos" | "documents" | "budget">("photos");
   const [budgetAmount, setBudgetAmount] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Budget info
+  const totalBudgetUsed = events?.reduce((s, e) => s + (e.budgetUsed || 0), 0) || 0;
+  const budgetAllocated = club?.budgetAllocated || 0;
+  const budgetPercent = budgetAllocated > 0 ? Math.round((totalBudgetUsed / budgetAllocated) * 100) : 0;
 
   const handleSubmit = (data: Partial<Event> & { id?: string }) => {
     const mutation = data.id ? updateEvent : createEvent;
@@ -106,6 +122,13 @@ const FacultyEvents = () => {
     }
   };
 
+  const handleSubmitProof = (eventId: string) => {
+    submitProof.mutate(eventId, {
+      onSuccess: () => toast({ title: "Proofs submitted for admin review" }),
+      onError: (err: any) => toast({ title: "Error", description: err.response?.data?.message || "Failed", variant: "destructive" }),
+    });
+  };
+
   const isUploading = uploadPhotos.isPending || uploadDocs.isPending || uploadBudget.isPending;
 
   return (
@@ -119,6 +142,26 @@ const FacultyEvents = () => {
           <Plus className="h-4 w-4" /> Add Event
         </Button>
       </div>
+
+      {/* Budget Bar */}
+      {budgetAllocated > 0 && (
+        <Card className="shadow-card">
+          <CardContent className="pt-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-card-foreground">Club Budget</span>
+              <span className="text-xs text-muted-foreground">
+                ₹{totalBudgetUsed.toLocaleString("en-IN")} / ₹{budgetAllocated.toLocaleString("en-IN")}
+              </span>
+            </div>
+            <Progress value={budgetPercent} className="h-2" />
+            {budgetPercent >= 80 && (
+              <p className="text-xs text-[hsl(var(--status-warning))] mt-1">
+                ⚠️ {budgetPercent}% of budget used
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {isLoading ? (
@@ -163,6 +206,21 @@ const FacultyEvents = () => {
                     )}
                   </div>
 
+                  {/* Proof Status */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Proof:</span>
+                    <Badge variant={proofStatusColors[event.proofStatus || "pending"] as any} className="capitalize text-xs">
+                      {event.proofStatus === "approved" && <CheckCircle className="h-3 w-3 mr-1" />}
+                      {event.proofStatus === "rejected" && <XCircle className="h-3 w-3 mr-1" />}
+                      {event.proofStatus || "pending"}
+                    </Badge>
+                    {event.proofRemarks && (
+                      <span className="text-xs text-muted-foreground italic truncate max-w-[120px]" title={event.proofRemarks}>
+                        {event.proofRemarks}
+                      </span>
+                    )}
+                  </div>
+
                   {/* Upload buttons */}
                   <div className="flex gap-1.5 pt-1">
                     <Button size="sm" variant="outline" className="flex-1 gap-1 text-xs" onClick={() => openUploadDialog(event, "photos")}>
@@ -175,6 +233,18 @@ const FacultyEvents = () => {
                       <DollarSign className="h-3 w-3" /> Budget
                     </Button>
                   </div>
+
+                  {/* Submit proof to admin */}
+                  {event.proofStatus === "pending" && ((event.photos?.length ?? 0) > 0 || (event.documents?.length ?? 0) > 0) && (
+                    <Button
+                      size="sm"
+                      className="w-full gap-1 bg-gradient-primary border-0 hover:opacity-90 text-xs"
+                      onClick={() => handleSubmitProof(event._id)}
+                      disabled={submitProof.isPending}
+                    >
+                      <Send className="h-3 w-3" /> Submit Proofs for Review
+                    </Button>
+                  )}
 
                   <div className="flex gap-2 pt-1">
                     <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={() => { setEditingEvent(event); setFormOpen(true); }}>

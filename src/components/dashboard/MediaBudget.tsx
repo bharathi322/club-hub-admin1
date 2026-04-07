@@ -1,15 +1,17 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Image, FileText, IndianRupee } from "lucide-react";
-import { useBudget } from "@/hooks/use-dashboard-api";
+import { useBudgetOverview } from "@/hooks/use-dashboard-api";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const MediaBudget = () => {
-  const { data, isLoading } = useBudget();
+  const { data: overview, isLoading } = useBudgetOverview();
 
-  const budgetPercent = data ? Math.round((data.budgetUsed / data.budgetTotal) * 100) : 0;
-  const remaining = data ? data.budgetTotal - data.budgetUsed : 0;
+  const totalAllocated = overview?.reduce((s, o) => s + o.budgetAllocated, 0) ?? 0;
+  const totalUsed = overview?.reduce((s, o) => s + o.budgetUsed, 0) ?? 0;
+  const totalPhotos = overview?.reduce((s, o) => s + o.eventCount, 0) ?? 0;
+  const budgetPercent = totalAllocated > 0 ? Math.round((totalUsed / totalAllocated) * 100) : 0;
+  const remaining = totalAllocated - totalUsed;
 
   return (
     <div className="space-y-4">
@@ -21,24 +23,21 @@ const MediaBudget = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-muted-foreground">
               <Image className="h-4 w-4" />
-              <span className="text-sm">Photos Uploaded</span>
+              <span className="text-sm">Total Events</span>
             </div>
             {isLoading ? <Skeleton className="h-5 w-10" /> : (
-              <span className="text-sm font-bold text-card-foreground">{data?.photosUploaded ?? "--"}</span>
+              <span className="text-sm font-bold text-card-foreground">{totalPhotos}</span>
             )}
           </div>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-muted-foreground">
               <FileText className="h-4 w-4" />
-              <span className="text-sm">Reports Pending</span>
+              <span className="text-sm">Active Clubs</span>
             </div>
             {isLoading ? <Skeleton className="h-5 w-10" /> : (
-              <span className="text-sm font-bold text-card-foreground">{data?.reportsPending ?? "--"}</span>
+              <span className="text-sm font-bold text-card-foreground">{overview?.length ?? 0}</span>
             )}
           </div>
-          <Button variant="outline" size="sm" className="w-full mt-2 gap-2">
-            View All Media & Documents
-          </Button>
         </CardContent>
       </Card>
 
@@ -57,12 +56,27 @@ const MediaBudget = () => {
               <div className="flex justify-between text-sm">
                 <div>
                   <p className="text-muted-foreground">Budget Used</p>
-                  <p className="font-bold text-card-foreground">₹{data?.budgetUsed?.toLocaleString("en-IN") ?? "--"}</p>
+                  <p className="font-bold text-card-foreground">₹{totalUsed.toLocaleString("en-IN")}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-muted-foreground">Remaining</p>
-                  <p className="font-bold text-status-healthy">₹{remaining.toLocaleString("en-IN")}</p>
+                  <p className="font-bold text-[hsl(var(--status-healthy))]">₹{remaining.toLocaleString("en-IN")}</p>
                 </div>
+              </div>
+
+              {/* Per-club breakdown */}
+              <div className="space-y-2 pt-2 border-t">
+                {overview?.map((item) => (
+                  <div key={item.club._id} className="flex items-center justify-between text-xs">
+                    <div>
+                      <span className="font-medium text-card-foreground">{item.faculty?.name || "Unassigned"}</span>
+                      <span className="text-muted-foreground ml-1">({item.club.name})</span>
+                    </div>
+                    <span className="text-muted-foreground">
+                      ₹{item.budgetUsed.toLocaleString("en-IN")} ({item.eventCount} events)
+                    </span>
+                  </div>
+                ))}
               </div>
             </>
           )}

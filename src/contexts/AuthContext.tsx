@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import api from "@/lib/api";
+import { connectSocket, disconnectSocket } from "@/lib/socket";
 import type { User, LoginCredentials, SignupCredentials, AuthResponse } from "@/types/api";
 
 interface AuthContextType {
@@ -24,7 +25,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const savedUser = localStorage.getItem("user");
     if (savedToken && savedUser) {
       setToken(savedToken);
-      setUser(JSON.parse(savedUser));
+      const parsed = JSON.parse(savedUser);
+      setUser(parsed);
+      // Connect socket on restore
+      connectSocket(parsed._id, parsed.role);
     }
     setIsLoading(false);
   }, []);
@@ -35,6 +39,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.setItem("user", JSON.stringify(data.user));
     setToken(data.token);
     setUser(data.user);
+    connectSocket(data.user._id, data.user.role);
   };
 
   const signup = async (credentials: SignupCredentials) => {
@@ -43,6 +48,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.setItem("user", JSON.stringify(data.user));
     setToken(data.token);
     setUser(data.user);
+    connectSocket(data.user._id, data.user.role);
   };
 
   const logout = () => {
@@ -50,6 +56,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.removeItem("user");
     setToken(null);
     setUser(null);
+    disconnectSocket();
   };
 
   return (

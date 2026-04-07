@@ -213,6 +213,113 @@ export const useUpdateEventBudget = () => {
   });
 };
 
+// Faculty: submit proofs for admin review
+export const useSubmitProof = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (eventId: string) => api.post(`/faculty/events/${eventId}/submit-proof`).then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["facultyEvents"] });
+    },
+  });
+};
+
+// Admin: review proof
+export const useReviewProof = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ eventId, status, remarks }: { eventId: string; status: string; remarks: string }) =>
+      api.put(`/admin/events/${eventId}/review-proof`, { status, remarks }).then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["adminClubEvents"] });
+      qc.invalidateQueries({ queryKey: ["events"] });
+      qc.invalidateQueries({ queryKey: ["clubs"] });
+    },
+  });
+};
+
+// Admin: allocate budget
+export const useAllocateBudget = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clubId, budgetAllocated }: { clubId: string; budgetAllocated: number }) =>
+      api.put(`/admin/clubs/${clubId}/budget`, { budgetAllocated }).then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["clubs"] });
+      qc.invalidateQueries({ queryKey: ["budgetOverview"] });
+    },
+  });
+};
+
+// Admin: create faculty
+export const useCreateFaculty = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { name: string; email: string; clubId?: string }) =>
+      api.post("/admin/faculty", data).then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["adminFaculty"] });
+    },
+  });
+};
+
+// Admin: assign faculty to club
+export const useAssignFaculty = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ facultyId, clubId }: { facultyId: string; clubId: string }) =>
+      api.put(`/admin/faculty/${facultyId}/assign`, { clubId }).then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["adminFaculty"] });
+    },
+  });
+};
+
+// Admin: recalculate health
+export const useRecalculateHealth = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post("/admin/recalculate-health").then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["clubs"] });
+    },
+  });
+};
+
+// QR Attendance
+export const useGenerateQR = () => {
+  return useMutation({
+    mutationFn: (eventId: string) => api.post(`/attendance/generate-qr/${eventId}`).then(r => r.data),
+  });
+};
+
+export const useScanQR = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (qrToken: string) => api.post("/attendance/scan", { qrToken }).then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["myRegistrations"] });
+    },
+  });
+};
+
+// Student: upload photos
+export const useStudentUploadPhotos = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ eventId, files }: { eventId: string; files: File[] }) => {
+      const formData = new FormData();
+      files.forEach(f => formData.append("photos", f));
+      return api.post(`/student/events/${eventId}/upload-photos`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      }).then(r => r.data);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["myRegistrations"] });
+    },
+  });
+};
+
 // Notification mutations
 export const useMarkNotificationRead = () => {
   const qc = useQueryClient();
@@ -261,5 +368,13 @@ export const useUpdateFacultyClub = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["facultyClub"] });
     },
+  });
+};
+
+// Auth: change password
+export const useChangePassword = () => {
+  return useMutation({
+    mutationFn: (newPassword: string) =>
+      api.post("/auth/change-password", { newPassword }).then(r => r.data),
   });
 };

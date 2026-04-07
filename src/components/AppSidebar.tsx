@@ -12,6 +12,9 @@ import {
   Bell,
   BarChart3,
   FolderOpen,
+  QrCode,
+  IndianRupee,
+  ScanLine,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -47,6 +50,7 @@ const studentNav = [
   { title: "Events", url: "/student/events", icon: CalendarDays },
   { title: "Clubs", url: "/student/clubs", icon: Users },
   { title: "My Registrations", url: "/student/registrations", icon: ClipboardList },
+  { title: "Check-in", url: "/student/check-in", icon: ScanLine },
   { title: "Notifications", url: "/student/notifications", icon: Bell },
   { title: "Profile", url: "/student/profile", icon: GraduationCap },
 ];
@@ -54,6 +58,7 @@ const studentNav = [
 const facultyNav = [
   { title: "Dashboard", url: "/faculty", icon: LayoutDashboard },
   { title: "Events", url: "/faculty/events", icon: CalendarDays },
+  { title: "QR Attendance", url: "/faculty/qr-attendance", icon: QrCode },
   { title: "Attendance", url: "/faculty/attendance", icon: ClipboardList },
   { title: "Analytics", url: "/faculty/analytics", icon: BarChart3 },
   { title: "Members", url: "/faculty/members", icon: Users },

@@ -7,6 +7,7 @@ const userSchema = new mongoose.Schema({
   password: { type: String, required: true },
   role: { type: String, enum: ["admin", "faculty", "student"], default: "student" },
   assignedClub: { type: mongoose.Schema.Types.ObjectId, ref: "Club", default: null },
+  mustChangePassword: { type: Boolean, default: false },
 }, { timestamps: true });
 
 userSchema.pre("save", async function (next) {
