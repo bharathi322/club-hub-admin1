@@ -11,6 +11,9 @@ import { motion } from "framer-motion";
 import { Bell, CheckCheck, Info, AlertTriangle, CheckCircle } from "lucide-react";
 import type { AppNotification } from "@/types/api";
 import { cn } from "@/lib/utils";
+import { socket } from "@/lib/socket";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 
 const typeConfig: Record<string, { icon: typeof Info; color: string; label: string }> = {
   info: { icon: Info, color: "text-primary", label: "Info" },
@@ -41,6 +44,39 @@ const StudentNotifications = () => {
       return dateStr;
     }
   };
+const queryClient = useQueryClient();
+useEffect(() => {
+  // NEW OR UPDATED NOTIFICATION
+  socket.on("notificationUpdated", (updatedNotification) => {
+    queryClient.setQueryData(["notifications"], (old: any) => {
+      if (!old) return [updatedNotification];
+
+      const exists = old.find((n: any) => n._id === updatedNotification._id);
+
+      if (exists) {
+        return old.map((n: any) =>
+          n._id === updatedNotification._id ? updatedNotification : n
+        );
+      }
+
+      // NEW notification → add on top
+      return [updatedNotification, ...old];
+    });
+  });
+
+  // MARK ALL READ
+  socket.on("notificationsCleared", () => {
+    queryClient.setQueryData(["notifications"], (old: any) => {
+      if (!old) return [];
+      return old.map((n: any) => ({ ...n, read: true }));
+    });
+  });
+
+  return () => {
+    socket.off("notificationUpdated");
+    socket.off("notificationsCleared");
+  };
+}, []);
 
   return (
     <div className="p-6 space-y-6">

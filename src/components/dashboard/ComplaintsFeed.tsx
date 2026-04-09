@@ -10,31 +10,52 @@ const ComplaintsFeed = () => {
   return (
     <Card className="shadow-card">
       <CardHeader className="pb-3">
-        <CardTitle className="text-base font-semibold">Complaints & Feedback</CardTitle>
+        <CardTitle className="text-base font-semibold">
+          Complaints & Feedback
+        </CardTitle>
       </CardHeader>
+
       <CardContent className="space-y-3">
         {isLoading ? (
           Array.from({ length: 2 }).map((_, i) => (
             <Skeleton key={i} className="h-16 w-full rounded-lg" />
           ))
-        ) : complaints?.length ? (
+        ) : Array.isArray(complaints) && complaints.length > 0 ? (
           complaints.map((c) => {
-            const Icon = c.type === "rating" ? Star : AlertTriangle;
-            const iconColor = c.type === "rating" ? "text-status-critical" : "text-status-warning";
+            const type = c?.type || "alert";
+            const Icon = type === "rating" ? Star : AlertTriangle;
+            const iconColor =
+              type === "rating"
+                ? "text-status-critical"
+                : "text-status-warning";
+
             return (
-              <div key={c._id} className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
+              <div
+                key={c._id}
+                className="flex items-start gap-3 p-3 rounded-lg bg-muted/50"
+              >
                 <Icon className={`h-4 w-4 mt-0.5 ${iconColor}`} />
+
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-card-foreground">{c.text}</p>
+                  <p className="text-sm font-medium text-card-foreground">
+                    {c.text || "No text"}
+                  </p>
+
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })}
+                    {c.createdAt
+                      ? formatDistanceToNow(new Date(c.createdAt), {
+                          addSuffix: true,
+                        })
+                      : "recently"}
                   </p>
                 </div>
               </div>
             );
           })
         ) : (
-          <p className="text-sm text-muted-foreground text-center py-4">No complaints</p>
+          <p className="text-sm text-muted-foreground text-center py-4">
+            No complaints
+          </p>
         )}
       </CardContent>
     </Card>

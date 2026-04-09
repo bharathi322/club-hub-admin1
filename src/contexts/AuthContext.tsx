@@ -1,75 +1,134 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import api from "@/lib/api";
-import { connectSocket, disconnectSocket } from "@/lib/socket";
-import type { User, LoginCredentials, SignupCredentials, AuthResponse } from "@/types/api";
+import api from "../api/api";
+import { getSocket } from "../lib/socket";
+const socket = getSocket();
+
+socket.on("connect", () => {
+  console.log("Connected");
+});
+
+interface User {
+  _id: string;
+  name: string;
+  email: string;
+  role: "admin" | "faculty" | "student";
+  assignedClub?: string | null;
+}
 
 interface AuthContextType {
   user: User | null;
-  token: string | null;
-  isLoading: boolean;
-  login: (credentials: LoginCredentials) => Promise<void>;
-  signup: (credentials: SignupCredentials) => Promise<void>;
+  loading: boolean;
+  login: (credentials: { email: string; password: string }) => Promise<void>;
+  signup: (data: {
+    name: string;
+    email: string;
+    password: string;
+    studentId: string;
+  }) => Promise<any>;
+  verifyOtp: (email: string, otp: string) => Promise<void>;
   logout: () => void;
-  isAuthenticated: boolean;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType | null>(null);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
 
+  // LOAD FROM STORAGE
   useEffect(() => {
-    const savedToken = localStorage.getItem("token");
-    const savedUser = localStorage.getItem("user");
-    if (savedToken && savedUser) {
-      setToken(savedToken);
-      const parsed = JSON.parse(savedUser);
-      setUser(parsed);
-      // Connect socket on restore
-      connectSocket(parsed._id, parsed.role);
+    try {
+      const storedUser = localStorage.getItem("user");
+      const token = localStorage.getItem("token");
+
+      if (storedUser && token) {
+        const parsed = JSON.parse(storedUser);
+        if (parsed?._id) {
+          setUser(parsed);
+        }
+      }
+    } catch (err) {
+      console.error("Auth load error:", err);
+      localStorage.clear();
+    } finally {
+      setLoading(false);
     }
-    setIsLoading(false);
   }, []);
 
-  const login = async (credentials: LoginCredentials) => {
-    const { data } = await api.post<AuthResponse>("/auth/login", credentials);
-    localStorage.setItem("token", data.token);
-    localStorage.setItem("user", JSON.stringify(data.user));
-    setToken(data.token);
-    setUser(data.user);
-    connectSocket(data.user._id, data.user.role);
+  // SOCKET CONNECT
+  useEffect(() => {
+    if (user && user._id) {
+      if (!socket.connected) {
+        socket.connect();
+      }
+
+      socket.emit("register", {
+        userId: user._id,
+        role: user.role,
+      });
+    }
+
+    return () => {
+      socket.off("connect");
+    };
+  }, [user]);
+
+  // LOGIN
+  const login = async (credentials: { email: string; password: string }) => {
+    const res = await api.post("/auth/login", credentials);
+
+    if (!res?.data?.user || !res?.data?.token) {
+      throw new Error("Invalid login response");
+    }
+
+    localStorage.setItem("token", res.data.token);
+    localStorage.setItem("user", JSON.stringify(res.data.user));
+
+    setUser(res.data.user);
   };
 
-  const signup = async (credentials: SignupCredentials) => {
-    const { data } = await api.post<AuthResponse>("/auth/signup", credentials);
-    localStorage.setItem("token", data.token);
-    localStorage.setItem("user", JSON.stringify(data.user));
-    setToken(data.token);
-    setUser(data.user);
-    connectSocket(data.user._id, data.user.role);
+  // SIGNUP
+  const signup = async (data: {
+    name: string;
+    email: string;
+    password: string;
+    studentId: string;
+  }) => {
+    const res = await api.post("/auth/register", data);
+    return res.data;
   };
 
+  // VERIFY OTP
+  const verifyOtp = async (email: string, otp: string) => {
+    const res = await api.post("/auth/verify-otp", { email, otp });
+
+    if (!res?.data?.user || !res?.data?.token) {
+      throw new Error("OTP failed");
+    }
+
+    localStorage.setItem("token", res.data.token);
+    localStorage.setItem("user", JSON.stringify(res.data.user));
+
+    setUser(res.data.user);
+  };
+
+  // LOGOUT
   const logout = () => {
+    socket.disconnect();
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-    setToken(null);
     setUser(null);
-    disconnectSocket();
   };
 
   return (
-    <AuthContext.Provider
-      value={{ user, token, isLoading, login, signup, logout, isAuthenticated: !!token }}
-    >
-      {children}
+    <AuthContext.Provider value={{ user, loading, login, signup, verifyOtp, logout }}>
+      {!loading && children}
     </AuthContext.Provider>
   );
 };
 
 export const useAuth = () => {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+  if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
   return ctx;
 };

@@ -1,82 +1,100 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CalendarDays, Users, Star, ClipboardList, MessageSquare } from "lucide-react";
+import { CalendarDays, Users, ClipboardList, MessageSquare } from "lucide-react";
 import { useFacultyClub, useFacultyStats } from "@/hooks/use-dashboard-api";
 import { Skeleton } from "@/components/ui/skeleton";
-import { motion } from "framer-motion";
+import FacultyBudget from "@/components/dashboard/FacultyBudget";
+import EventsTable from "@/components/dashboard/EventsTable";
 
 const FacultyDashboard = () => {
   const { data: club, isLoading: clubLoading } = useFacultyClub();
   const { data: stats, isLoading: statsLoading } = useFacultyStats();
+
   const isLoading = clubLoading || statsLoading;
 
-  const statCards = [
-    { label: "Total Events", value: stats?.totalEvents ?? 0, icon: CalendarDays, color: "text-[hsl(var(--chart-1))]" },
-    { label: "Pending Events", value: stats?.pendingEvents ?? 0, icon: ClipboardList, color: "text-[hsl(var(--chart-4))]" },
-    { label: "Registrations", value: stats?.totalRegistrations ?? 0, icon: Users, color: "text-[hsl(var(--chart-3))]" },
-    { label: "Feedback", value: stats?.feedbackCount ?? 0, icon: MessageSquare, color: "text-[hsl(var(--chart-2))]" },
-  ];
+  // ✅ HANDLE NO CLUB ASSIGNED
+  if (!clubLoading && !club) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="p-6 text-center">
+            No Club Assigned
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Faculty Dashboard</h1>
-        {club && (
-          <p className="text-sm text-muted-foreground">
-            Managing <span className="font-medium text-foreground">{club.name}</span> — Rating: ⭐ {club.rating}/5
-          </p>
+
+      <h1 className="text-2xl font-bold">Faculty Dashboard</h1>
+
+      {/* ✅ STATS SECTION */}
+      <div className="grid grid-cols-4 gap-4">
+        {isLoading ? (
+          <>
+            <Skeleton className="h-20" />
+            <Skeleton className="h-20" />
+            <Skeleton className="h-20" />
+            <Skeleton className="h-20" />
+          </>
+        ) : (
+          <>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <p className="text-sm text-muted-foreground">Total Events</p>
+                <p className="text-lg font-bold">{stats?.totalEvents ?? 0}</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4 text-center">
+                <p className="text-sm text-muted-foreground">Pending Events</p>
+                <p className="text-lg font-bold">{stats?.pendingEvents ?? 0}</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4 text-center">
+                <p className="text-sm text-muted-foreground">Registrations</p>
+                <p className="text-lg font-bold">{stats?.totalRegistrations ?? 0}</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4 text-center">
+                <p className="text-sm text-muted-foreground">Feedback</p>
+                <p className="text-lg font-bold">{stats?.feedbackCount ?? 0}</p>
+              </CardContent>
+            </Card>
+          </>
         )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {isLoading
-          ? Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-lg" />)
-          : statCards.map((s, i) => (
-              <motion.div
-                key={s.label}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.08 }}
-              >
-                <Card className="shadow-card">
-                  <CardContent className="pt-5">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-muted-foreground">{s.label}</p>
-                        <p className="text-2xl font-bold text-card-foreground">{s.value}</p>
-                      </div>
-                      <s.icon className={`h-8 w-8 ${s.color} opacity-80`} />
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
-      </div>
-
+      {/* ✅ CLUB DETAILS */}
       {club && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
-          <Card className="shadow-card">
-            <CardHeader>
-              <CardTitle className="text-lg">Club Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p className="text-muted-foreground">Status</p>
-                  <p className="font-medium capitalize text-card-foreground">{club.status}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Members</p>
-                  <p className="font-medium text-card-foreground">{club.membersCount}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Rating</p>
-                  <p className="font-medium text-card-foreground">{club.rating}/5</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
+        <Card>
+          <CardHeader>
+            <CardTitle>{club.name}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            Members: {club.membersCount ?? 0} <br />
+            Rating: {club.rating ?? 0}
+          </CardContent>
+        </Card>
       )}
+
+      {/* ✅ BUDGET */}
+      {club && (
+        <FacultyBudget
+          allocated={club.budgetAllocated ?? 0}
+          used={club.budgetUsed ?? 0}
+        />
+      )}
+
+      {/* ✅ EVENTS TABLE */}
+      <EventsTable facultyView />
+
     </div>
   );
 };

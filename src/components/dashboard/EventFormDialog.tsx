@@ -4,6 +4,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -17,102 +18,192 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
-import type { Event } from "@/types/api";
+import { useClubs } from "@/hooks/use-dashboard-api";
+import { useAuth } from "@/contexts/AuthContext";
 
-interface EventFormDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  event?: Event | null;
-  onSubmit: (data: Partial<Event> & { id?: string }) => void;
-  isLoading: boolean;
-}
+const EventFormDialog = ({
+  open,
+  onOpenChange,
+  event,
+  onSubmit,
+  isLoading,
+}: any) => {
+  const { data: clubs } = useClubs();
+  const { user } = useAuth();
 
-const EventFormDialog = ({ open, onOpenChange, event, onSubmit, isLoading }: EventFormDialogProps) => {
   const [name, setName] = useState("");
   const [club, setClub] = useState("");
-  const [status, setStatus] = useState("pending");
-  const [rating, setRating] = useState("--");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
+  const [budgetSpent, setBudgetSpent] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
 
+  // ✅ Convert to AM/PM
+  const formatTime = (time: string) => {
+    if (!time) return "";
+
+    const [hour, minute] = time.split(":");
+    let h = parseInt(hour);
+    const ampm = h >= 12 ? "PM" : "AM";
+
+    h = h % 12 || 12;
+
+    return `${h}:${minute} ${ampm}`;
+  };
+
+  // ✅ Edit mode
   useEffect(() => {
     if (event) {
-      setName(event.name);
-      setClub(event.club);
-      setStatus(event.status);
-      setRating(event.rating);
-      setDate(event.date);
-      setTime(event.time);
+      setName(event.name || "");
+      setClub(event.clubId || "");
+      setDate(event.date ? event.date.split("T")[0] : "");
+      setTime(event.time || ""); // keep as 24h internally
+      setBudgetSpent(String(event.budgetSpent || 0));
     } else {
       setName("");
       setClub("");
-      setStatus("pending");
-      setRating("--");
       setDate("");
       setTime("");
+      setBudgetSpent("");
+      setFiles([]);
     }
   }, [event, open]);
 
+  // ✅ Faculty auto club
+  useEffect(() => {
+    if (user?.role === "faculty" && user?.assignedClubs?.length > 0) {
+      setClub(user.assignedClubs[0]);
+    }
+  }, [user]);
+
+  // ✅ Submit
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({
-      ...(event ? { id: event._id } : {}),
-      name,
-      club,
-      status: status as Event["status"],
-      rating,
-      date,
-      time,
+
+    const formData = new FormData();
+    formData.append("name", name);
+    formData.append("clubId", club);
+    formData.append("date", date);
+    formData.append("time", time); // store 24h format
+    formData.append("budgetSpent", String(Number(budgetSpent) || 0));
+
+    files.forEach((file) => {
+      formData.append("attachments", file);
     });
+
+    onSubmit(formData);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent>
         <DialogHeader>
-          <DialogTitle>{event ? "Edit Event" : "Add New Event"}</DialogTitle>
+          <DialogTitle>
+            {event ? "Edit Event" : "Add New Event"}
+          </DialogTitle>
+          <DialogDescription>
+            Fill the details to {event ? "update" : "create"} an event.
+          </DialogDescription>
         </DialogHeader>
+
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="event-name">Event Name</Label>
-            <Input id="event-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Hackathon 2026" required />
+
+          {/* Event Name */}
+          <div>
+            <Label>Event Name</Label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="event-club">Club</Label>
-            <Input id="event-club" value={club} onChange={(e) => setClub(e.target.value)} placeholder="e.g. Coding Club" required />
-          </div>
-          <div className="space-y-2">
-            <Label>Status</Label>
-            <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="approved">Approved</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="warning">Warning</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+
+          {/* Club */}
+          {user?.role === "admin" ? (
+            <div>
+              <Label>Club</Label>
+              <Select value={club} onValueChange={setClub}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select club" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clubs?.map((c: any) => (
+                    <SelectItem key={c._id} value={c._id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <div>
+              <Label>Club</Label>
+              <Input
+                value={
+                  clubs?.find((c: any) => String(c._id) === String(club))?.name || ""
+                }
+                disabled
+              />
+            </div>
+          )}
+
+          {/* Date & Time */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="event-date">Date</Label>
-              <Input id="event-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="event-time">Time</Label>
-              <Input id="event-time" value={time} onChange={(e) => setTime(e.target.value)} placeholder="09:00 AM" required />
+            <Input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              required
+            />
+
+            <div>
+              <Input
+                type="time"
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+                required
+              />
+
+              {/* ✅ AM/PM display */}
+              {time && (
+                <p className="text-sm text-gray-500 mt-1">
+                  Selected: {formatTime(time)}
+                </p>
+              )}
             </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="event-rating">Rating</Label>
-            <Input id="event-rating" value={rating} onChange={(e) => setRating(e.target.value)} placeholder="--" />
-          </div>
+
+          {/* Budget */}
+          <Input
+            type="number"
+            value={budgetSpent}
+            onChange={(e) => setBudgetSpent(e.target.value)}
+            placeholder="Budget"
+          />
+
+          {/* Upload only after completion */}
+          {event && event.status === "completed" && (
+            <Input
+              type="file"
+              multiple
+              onChange={(e) =>
+                setFiles(Array.from(e.target.files || []))
+              }
+            />
+          )}
+
+          {/* Buttons */}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button type="submit" className="bg-gradient-primary border-0" disabled={isLoading}>
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            <Button type="button" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+
+            <Button type="submit" disabled={isLoading}>
+              {isLoading && <Loader2 className="animate-spin mr-2" />}
               {event ? "Update" : "Create"}
             </Button>
           </DialogFooter>
+
         </form>
       </DialogContent>
     </Dialog>

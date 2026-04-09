@@ -1,408 +1,261 @@
-import { useState, useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { useEffect, useState, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { socket } from "@/lib/socket";
+
+import { useEvents, useClubs } from "@/hooks/use-dashboard-api";
+import {
+  useCreateEvent,
+  useUpdateEvent,
+  useDeleteEvent,
+} from "@/hooks/use-mutations";
+
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { Plus, Pencil, Trash2, Search, CalendarIcon, X, ChevronLeft, ChevronRight, Download, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
-import { useEvents, useClubs } from "@/hooks/use-dashboard-api";
-import { useCreateEvent, useUpdateEvent, useDeleteEvent } from "@/hooks/use-mutations";
 import { Skeleton } from "@/components/ui/skeleton";
-import EventFormDialog from "./EventFormDialog";
-import DeleteConfirmDialog from "./DeleteConfirmDialog";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
-import { cn } from "@/lib/utils";
-import type { Event } from "@/types/api";
+import { useAuth } from "@/contexts/AuthContext";
 
-type SortKey = "name" | "club" | "date" | "status" | "rating";
-type SortDir = "asc" | "desc";
+import EventFormDialog from "@/components/dashboard/EventFormDialog";
+import DeleteConfirmDialog from "@/components/dashboard/DeleteConfirmDialog";
 
-const statusVariant: Record<string, "default" | "secondary" | "destructive"> = {
-  approved: "default",
-  pending: "secondary",
-  warning: "destructive",
-};
+const EventsTable = ({ facultyView }: { facultyView?: boolean }) => {
+  const { data: events = [], isLoading } = useEvents();
+  const { data: clubs = [] } = useClubs();
+  const { user } = useAuth();
 
-const PAGE_SIZE_OPTIONS = [5, 10, 25, 50];
-
-const EventsTable = () => {
-  const { data: events, isLoading } = useEvents();
-  const { data: clubs } = useClubs();
   const createEvent = useCreateEvent();
   const updateEvent = useUpdateEvent();
   const deleteEvent = useDeleteEvent();
+
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 5;
 
   const [formOpen, setFormOpen] = useState(false);
-  const [editingEvent, setEditingEvent] = useState<Event | null>(null);
+  const [editingEvent, setEditingEvent] = useState<any>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // Filters
-  const [search, setSearch] = useState("");
-  const [clubFilter, setClubFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [dateFrom, setDateFrom] = useState<Date | undefined>();
-  const [dateTo, setDateTo] = useState<Date | undefined>();
+  /* ================= SOCKET ================= */
+  useEffect(() => {
+    const handleCreate = (newEvent: any) => {
+      queryClient.setQueryData(["events"], (old: any) =>
+        old ? [newEvent, ...old] : [newEvent]
+      );
+    };
 
-  // Sorting
-  const [sortKey, setSortKey] = useState<SortKey | null>(null);
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
+    const handleUpdate = (updatedEvent: any) => {
+      queryClient.setQueryData(["events"], (old: any) =>
+        old?.map((e: any) =>
+          e._id === updatedEvent._id ? updatedEvent : e
+        )
+      );
+    };
 
-  // Pagination
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+    const handleDelete = (id: string) => {
+      queryClient.setQueryData(["events"], (old: any) =>
+        old?.filter((e: any) => e._id !== id)
+      );
+    };
 
-  const toggleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      setSortDir("asc");
-    }
-    setPage(1);
-  };
+    socket.on("event:created", handleCreate);
+    socket.on("event:updated", handleUpdate);
 
-  const SortIcon = ({ column }: { column: SortKey }) => {
-    if (sortKey !== column) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-40" />;
-    return sortDir === "asc"
-      ? <ArrowUp className="h-3 w-3 ml-1" />
-      : <ArrowDown className="h-3 w-3 ml-1" />;
-  };
-
-  const filteredEvents = useMemo(() => {
-    if (!events) return [];
-    let result = events.filter((e) => {
-      if (search && !e.name.toLowerCase().includes(search.toLowerCase()) && !e.club.toLowerCase().includes(search.toLowerCase())) return false;
-      if (clubFilter !== "all" && e.club !== clubFilter) return false;
-      if (statusFilter !== "all" && e.status !== statusFilter) return false;
-      if (dateFrom && e.date < format(dateFrom, "yyyy-MM-dd")) return false;
-      if (dateTo && e.date > format(dateTo, "yyyy-MM-dd")) return false;
-      return true;
+    // ✅ FIXED SOCKET NAME
+    socket.on("event:deleted", (data: any) => {
+      handleDelete(data.eventId);
     });
-    if (sortKey) {
-      result = [...result].sort((a, b) => {
-        let aVal = a[sortKey] ?? "";
-        let bVal = b[sortKey] ?? "";
-        if (sortKey === "rating") {
-          const aNum = parseFloat(String(aVal)) || 0;
-          const bNum = parseFloat(String(bVal)) || 0;
-          return sortDir === "asc" ? aNum - bNum : bNum - aNum;
-        }
-        aVal = String(aVal).toLowerCase();
-        bVal = String(bVal).toLowerCase();
-        if (aVal < bVal) return sortDir === "asc" ? -1 : 1;
-        if (aVal > bVal) return sortDir === "asc" ? 1 : -1;
-        return 0;
-      });
-    }
-    return result;
-  }, [events, search, clubFilter, statusFilter, dateFrom, dateTo, sortKey, sortDir]);
 
-  // Reset page when filters change
+    return () => {
+      socket.off("event:created", handleCreate);
+      socket.off("event:updated", handleUpdate);
+      socket.off("event:deleted");
+    };
+  }, [queryClient]);
+
+  /* ================= SAFE EVENTS ================= */
+  const safeEvents = Array.isArray(events)
+    ? events
+    : Array.isArray(events?.events)
+    ? events.events
+    : [];
+
+  /* ================= SEARCH ================= */
+  const filteredEvents = useMemo(() => {
+    return safeEvents.filter(
+      (e: any) =>
+        e?.name &&
+        e.name.toLowerCase().includes(search.toLowerCase())
+    );
+  }, [safeEvents, search]);
+
   const totalPages = Math.max(1, Math.ceil(filteredEvents.length / pageSize));
   const safePage = Math.min(page, totalPages);
-  if (safePage !== page) setPage(safePage);
 
-  const paginatedEvents = useMemo(() => {
-    const start = (safePage - 1) * pageSize;
-    return filteredEvents.slice(start, start + pageSize);
-  }, [filteredEvents, safePage, pageSize]);
+  useEffect(() => {
+    if (safePage !== page) setPage(safePage);
+  }, [safePage, page]);
 
-  const uniqueClubs = useMemo(() => {
-    if (clubs?.length) return clubs.map((c) => c.name);
-    if (!events) return [];
-    return [...new Set(events.map((e) => e.club))];
-  }, [events, clubs]);
+  const paginatedEvents = filteredEvents.slice(
+    (safePage - 1) * pageSize,
+    safePage * pageSize
+  );
 
-  const hasActiveFilters = search || clubFilter !== "all" || statusFilter !== "all" || dateFrom || dateTo;
-
-  const clearFilters = () => {
-    setSearch("");
-    setClubFilter("all");
-    setStatusFilter("all");
-    setDateFrom(undefined);
-    setDateTo(undefined);
-    setPage(1);
-  };
-
-  const exportToCSV = () => {
-    if (!filteredEvents.length) return;
-    const headers = ["Event Name", "Club", "Date", "Status", "Rating"];
-    const rows = filteredEvents.map((e) => [
-      `"${e.name.replace(/"/g, '""')}"`,
-      `"${e.club.replace(/"/g, '""')}"`,
-      e.date,
-      e.status,
-      e.rating ?? "",
-    ]);
-    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `events-${format(new Date(), "yyyy-MM-dd")}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast({ title: "Exported", description: `${filteredEvents.length} events exported to CSV` });
-  };
-
-  const handleSubmit = (data: Partial<Event> & { id?: string }) => {
+  /* ================= CREATE / UPDATE ================= */
+  const handleSubmit = (data: any) => {
     const mutation = data.id ? updateEvent : createEvent;
-    mutation.mutate(data as any, {
+
+    mutation.mutate(data, {
       onSuccess: () => {
         setFormOpen(false);
         setEditingEvent(null);
-        toast({ title: data.id ? "Event updated" : "Event created" });
-      },
-      onError: (err: any) => {
-        toast({ title: "Error", description: err.response?.data?.message || "Failed", variant: "destructive" });
+        toast({ title: "Saved successfully" });
       },
     });
   };
 
+  /* ================= DELETE ================= */
   const handleDelete = () => {
     if (!deletingId) return;
+
     deleteEvent.mutate(deletingId, {
       onSuccess: () => {
+        // ✅ instant UI update
+        queryClient.setQueryData(["events"], (old: any) =>
+          old?.filter((e: any) => e._id !== deletingId)
+        );
+
         setDeleteOpen(false);
         setDeletingId(null);
-        toast({ title: "Event deleted" });
+        toast({ title: "Deleted successfully" });
       },
-      onError: (err: any) => {
-        toast({ title: "Error", description: err.response?.data?.message || "Failed", variant: "destructive" });
+      onError: (err) => {
+        console.log("Delete error:", err);
       },
     });
   };
 
   return (
-    <>
-      <Card className="shadow-card">
-        <CardHeader className="pb-3 flex flex-row items-center justify-between">
-          <CardTitle className="text-base font-semibold">Events Overview</CardTitle>
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-1 h-7 text-xs"
-              onClick={exportToCSV}
-              disabled={!filteredEvents.length}
-            >
-              <Download className="h-3 w-3" /> Export CSV
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-1 h-7 text-xs"
-              onClick={() => { setEditingEvent(null); setFormOpen(true); }}
-            >
-              <Plus className="h-3 w-3" /> Add Event
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Filters */}
-          <div className="flex flex-wrap gap-2 items-end">
-            <div className="relative flex-1 min-w-[180px]">
-              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                placeholder="Search events..."
-                value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                className="pl-8 h-9 text-sm"
-              />
+    <div className="space-y-4">
+
+      {/* HEADER */}
+      <div className="flex justify-between">
+        <Input
+          placeholder="Search events..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+
+        {!facultyView && (
+          <Button onClick={() => setFormOpen(true)}>
+            Add Event
+          </Button>
+        )}
+      </div>
+
+      {/* TABLE */}
+      <Card>
+        <CardContent>
+          {isLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-10" />
+              ))}
             </div>
-            <Select value={clubFilter} onValueChange={(v) => { setClubFilter(v); setPage(1); }}>
-              <SelectTrigger className="w-[140px] h-9 text-sm">
-                <SelectValue placeholder="All Clubs" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Clubs</SelectItem>
-                {uniqueClubs.map((c) => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
+          ) : paginatedEvents.length ? (
+            <table className="w-full text-sm">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Club</th>
+                  <th>Date</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {paginatedEvents.map((event: any) => (
+                  <tr key={event._id}>
+                    <td>{event.name}</td>
+
+                    {/* ✅ FIXED clubId */}
+                    <td>
+  {event.clubId?.name ||
+    clubs.find(
+      (c: any) =>
+        String(c._id) === String(event.clubId?._id || event.clubId)
+    )?.name ||
+    "Unknown Club"}
+</td>
+<td>{event.facultyId?.name || "Unknown Faculty"}</td>
+                    <td>{event.date}</td>
+                    <td>{event.status}</td>
+
+                    <td className="space-x-2">
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setEditingEvent(event);
+                          setFormOpen(true);
+                        }}
+                      >
+                        Edit
+                      </Button>
+
+                      {(
+  user?.role === "admin" ||
+  (user?.role === "faculty" &&
+    user?.assignedClubs?.includes(String(event.clubId)))
+) && (
+  <Button
+  size="sm"
+  variant="destructive"
+  disabled={deleteEvent.isPending}
+  onClick={() => {
+    setDeletingId(String(event._id));
+    setDeleteOpen(true);
+  }}
+>
+  Delete
+</Button>
+)}
+                    </td>
+                  </tr>
                 ))}
-              </SelectContent>
-            </Select>
-            <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
-              <SelectTrigger className="w-[130px] h-9 text-sm">
-                <SelectValue placeholder="All Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="approved">Approved</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="warning">Warning</SelectItem>
-              </SelectContent>
-            </Select>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className={cn("h-9 text-sm gap-1.5 font-normal", !dateFrom && "text-muted-foreground")}>
-                  <CalendarIcon className="h-3.5 w-3.5" />
-                  {dateFrom ? format(dateFrom, "MMM d") : "From"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar mode="single" selected={dateFrom} onSelect={(d) => { setDateFrom(d); setPage(1); }} initialFocus className="p-3 pointer-events-auto" />
-              </PopoverContent>
-            </Popover>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className={cn("h-9 text-sm gap-1.5 font-normal", !dateTo && "text-muted-foreground")}>
-                  <CalendarIcon className="h-3.5 w-3.5" />
-                  {dateTo ? format(dateTo, "MMM d") : "To"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar mode="single" selected={dateTo} onSelect={(d) => { setDateTo(d); setPage(1); }} initialFocus className="p-3 pointer-events-auto" />
-              </PopoverContent>
-            </Popover>
-            {hasActiveFilters && (
-              <Button variant="ghost" size="sm" className="h-9 gap-1 text-xs text-muted-foreground" onClick={clearFilters}>
-                <X className="h-3 w-3" /> Clear
-              </Button>
-            )}
-          </div>
-
-          {/* Results count */}
-          {!isLoading && events && (
-            <p className="text-xs text-muted-foreground">
-              Showing {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, filteredEvents.length)} of {filteredEvents.length} events
-              {hasActiveFilters && ` (${events.length} total)`}
-            </p>
-          )}
-
-          {/* Table */}
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("name")}>
-                  <span className="inline-flex items-center">Event Name <SortIcon column="name" /></span>
-                </TableHead>
-                <TableHead className="cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("club")}>
-                  <span className="inline-flex items-center">Club <SortIcon column="club" /></span>
-                </TableHead>
-                <TableHead className="cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("date")}>
-                  <span className="inline-flex items-center">Date <SortIcon column="date" /></span>
-                </TableHead>
-                <TableHead className="cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("status")}>
-                  <span className="inline-flex items-center">Status <SortIcon column="status" /></span>
-                </TableHead>
-                <TableHead className="text-right cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("rating")}>
-                  <span className="inline-flex items-center justify-end w-full">Rating <SortIcon column="rating" /></span>
-                </TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                Array.from({ length: pageSize }).map((_, i) => (
-                  <TableRow key={i}>
-                    <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-8 ml-auto" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-12 ml-auto" /></TableCell>
-                  </TableRow>
-                ))
-              ) : paginatedEvents.length ? (
-                paginatedEvents.map((e) => (
-                  <TableRow key={e._id}>
-                    <TableCell className="font-medium">{e.name}</TableCell>
-                    <TableCell className="text-muted-foreground">{e.club}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{e.date}</TableCell>
-                    <TableCell>
-                      <Badge variant={statusVariant[e.status] || "secondary"} className="capitalize">{e.status}</Badge>
-                    </TableCell>
-                    <TableCell className="text-right font-mono">{e.rating || "--"}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditingEvent(e); setFormOpen(true); }}>
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                        <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => { setDeletingId(e._id); setDeleteOpen(true); }}>
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-6">
-                    {hasActiveFilters ? "No events match your filters" : "No events found"}
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-
-          {/* Pagination */}
-          {!isLoading && filteredEvents.length > 0 && (
-            <div className="flex items-center justify-between pt-2">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">Rows per page</span>
-                <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}>
-                  <SelectTrigger className="w-[70px] h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PAGE_SIZE_OPTIONS.map((s) => (
-                      <SelectItem key={s} value={String(s)}>{s}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex items-center gap-1">
-                <span className="text-xs text-muted-foreground mr-2">
-                  Page {safePage} of {totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
-                  disabled={safePage <= 1}
-                  onClick={() => setPage(safePage - 1)}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
-                  disabled={safePage >= totalPages}
-                  onClick={() => setPage(safePage + 1)}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+              </tbody>
+            </table>
+          ) : (
+            <p className="text-center py-6">No events found</p>
           )}
         </CardContent>
       </Card>
 
+      {/* DIALOGS */}
       <EventFormDialog
         open={formOpen}
         onOpenChange={setFormOpen}
         event={editingEvent}
         onSubmit={handleSubmit}
-        isLoading={createEvent.isPending || updateEvent.isPending}
       />
+
       <DeleteConfirmDialog
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        title="Delete Event"
-        description="Are you sure you want to delete this event? This action cannot be undone."
-        onConfirm={handleDelete}
-        isLoading={deleteEvent.isPending}
-      />
-    </>
+  open={deleteOpen}
+  onOpenChange={setDeleteOpen}
+  title="Delete Event"
+  description={`Are you sure you want to delete "${
+    safeEvents.find((e: any) => e._id === deletingId)?.name || "this event"
+  }"? This action cannot be undone.`}
+  onConfirm={handleDelete}
+  isLoading={deleteEvent.isPending}
+/>
+    </div>
   );
 };
+
 
 export default EventsTable;

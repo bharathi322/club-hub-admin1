@@ -8,15 +8,24 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useCalendarEvents } from "@/hooks/use-dashboard-api";
 import { Skeleton } from "@/components/ui/skeleton";
 
-const statusVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+const statusVariant: Record<
+  string,
+  "default" | "secondary" | "destructive" | "outline"
+> = {
   approved: "default",
   pending: "secondary",
   warning: "destructive",
 };
 
 const DayFlowCalendar = () => {
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
-  const dateKey = selectedDate ? format(selectedDate, "yyyy-MM-dd") : "";
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(
+    new Date()
+  );
+
+  const dateKey = selectedDate
+    ? format(selectedDate, "yyyy-MM-dd")
+    : "";
+
   const { data, isLoading } = useCalendarEvents(dateKey);
 
   const dayEvents = data?.events || [];
@@ -25,9 +34,11 @@ const DayFlowCalendar = () => {
     <Card className="shadow-card">
       <CardHeader className="pb-3">
         <CardTitle className="text-base font-semibold flex items-center gap-2">
-          <CalendarDays className="h-4 w-4" /> Day Flow
+          <CalendarDays className="h-4 w-4" />
+          Day Flow
         </CardTitle>
       </CardHeader>
+
       <CardContent className="space-y-4">
         <Calendar
           mode="single"
@@ -38,7 +49,9 @@ const DayFlowCalendar = () => {
 
         <div className="space-y-1">
           <h4 className="text-sm font-semibold text-card-foreground">
-            {selectedDate ? format(selectedDate, "EEEE, MMMM d, yyyy") : "Select a date"}
+            {selectedDate
+              ? format(selectedDate, "EEEE, MMMM d, yyyy")
+              : "Select a date"}
           </h4>
 
           <AnimatePresence mode="wait">
@@ -56,24 +69,40 @@ const DayFlowCalendar = () => {
                 exit={{ opacity: 0, y: -8 }}
                 className="space-y-2 pt-1"
               >
-                {dayEvents.map((event, i) => (
-                  <div
-                    key={i}
-                    className="flex items-start gap-3 p-2 rounded-lg bg-muted/50 border border-border"
-                  >
-                    <div className="flex items-center gap-1 text-muted-foreground min-w-[80px]">
-                      <Clock className="h-3 w-3" />
-                      <span className="text-xs">{event.time}</span>
+                {dayEvents.map((event: any, i: number) => {
+                  const status =
+                    statusVariant[event?.status] || "outline";
+
+                  return (
+                    <div
+                      key={i}
+                      className="flex items-start gap-3 p-2 rounded-lg bg-muted/50 border border-border"
+                    >
+                      <div className="flex items-center gap-1 text-muted-foreground min-w-[80px]">
+                        <Clock className="h-3 w-3" />
+                        <span className="text-xs">
+                          {event?.time || "--"}
+                        </span>
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-card-foreground truncate">
+                          {event?.title || "Untitled Event"}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {event?.club || "Unknown Club"}
+                        </p>
+                      </div>
+
+                      <Badge
+                        variant={status}
+                        className="text-[10px] capitalize"
+                      >
+                        {event?.status || "unknown"}
+                      </Badge>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-card-foreground truncate">{event.title}</p>
-                      <p className="text-xs text-muted-foreground">{event.club}</p>
-                    </div>
-                    <Badge variant={statusVariant[event.status]} className="text-[10px] capitalize">
-                      {event.status}
-                    </Badge>
-                  </div>
-                ))}
+                  );
+                })}
               </motion.div>
             ) : (
               <motion.p

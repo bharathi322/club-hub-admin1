@@ -1,70 +1,77 @@
-const Notification = require("../models/Notification");
-const EventRegistration = require("../models/EventRegistration");
-const User = require("../models/User");
-const { sendEmail, eventRegistrationEmail, eventReminderEmail } = require("./emailService");
-const { emitToUser, emitToRole } = require("./socketManager");
+import Notification from "../models/Notification.js";
+import User from "../models/User.js";
+import EventRegistration from "../models/EventRegistration.js";
+import { sendEmail, eventRegistrationEmail, eventReminderEmail, proofSubmittedEmail, proofReviewEmail, budgetAllocatedEmail } from "./emailService.js";
+import { emitToUser, emitToRole } from "./socketManager.js";
 
-/**
- * Notify all students about a new event being created.
- */
-async function notifyNewEvent(event) {
+// New Event Notification
+export async function notifyNewEvent(event) {
   try {
-    const students = await User.find({ role: "student" }).select("_id");
-    const notifications = students.map((s) => ({
-      user: s._id,
-      title: "New Event Posted",
-      description: `"${event.name}" by ${event.club} on ${event.date}`,
+    const faculty = await User.find({ role: "faculty", isActive: true });
+
+    const notifications = faculty.map((f) => ({
+      user: f._id,
+      title: "New Event Created",
+      description: `${event.name} created`,
       type: "info",
       relatedEvent: event._id,
     }));
-    if (notifications.length) await Notification.insertMany(notifications);
 
-    // Real-time push
+    if (notifications.length) {
+      await Notification.insertMany(notifications);
+    }
+
     emitToRole("student", "new-event", { event });
   } catch (err) {
-    console.error("notifyNewEvent error:", err.message);
+    console.error("notifyNewEvent error:", err);
   }
 }
 
-/**
- * Notify registered students when an event status changes.
- */
-async function notifyEventStatusChange(event, oldStatus) {
+// Event Status Change
+export async function notifyEventStatusChange(event) {
   try {
     const regs = await EventRegistration.find({ event: event._id }).select("student");
-    const typeMap = { approved: "success", pending: "warning", warning: "warning" };
+
     const notifications = regs.map((r) => ({
       user: r.student,
       title: "Event Status Updated",
-      description: `"${event.name}" changed from ${oldStatus} to ${event.status}`,
-      type: typeMap[event.status] || "info",
+      description: `${event.name} is now ${event.status}`,
+      type: "info",
       relatedEvent: event._id,
     }));
-    if (notifications.length) await Notification.insertMany(notifications);
 
-    // Real-time push to each registered student
+    if (notifications.length) {
+      await Notification.insertMany(notifications);
+    }
+
     for (const r of regs) {
       emitToUser(r.student.toString(), "event-status-changed", { event });
     }
   } catch (err) {
-    console.error("notifyEventStatusChange error:", err.message);
+    console.error("notifyEventStatusChange error:", err);
   }
 }
 
-/**
- * Send registration confirmation email + notify faculty.
- */
-async function notifyEventRegistration(student, event) {
+// Registration
+export async function notifyEventRegistration(student, event) {
   try {
-    // Email to student
-    const emailData = eventRegistrationEmail(student.name, event.name, event.club, event.date, event.time);
+    const emailData = eventRegistrationEmail(
+      student.name,
+      event.name,
+      event.club,
+      event.date,
+      event.time
+    );
+
     await sendEmail({ to: student.email, ...emailData });
 
-    // Notify faculty in real-time
-    emitToRole("faculty", "new-registration", { student: { name: student.name }, event });
+    emitToRole("faculty", "new-registration", {
+      student: { name: student.name },
+      event,
+    });
 
-    // In-app notification to faculty
     const faculty = await User.find({ role: "faculty" }).populate("assignedClub");
+
     for (const f of faculty) {
       if (f.assignedClub?.name === event.club) {
         await Notification.create({
@@ -74,6 +81,7 @@ async function notifyEventRegistration(student, event) {
           type: "info",
           relatedEvent: event._id,
         });
+
         emitToUser(f._id.toString(), "notification", {
           title: "New Registration",
           description: `${student.name} registered for "${event.name}"`,
@@ -81,16 +89,15 @@ async function notifyEventRegistration(student, event) {
       }
     }
   } catch (err) {
-    console.error("notifyEventRegistration error:", err.message);
+    console.error("notifyEventRegistration error:", err);
   }
 }
 
-/**
- * Notify admin when faculty submits proofs.
- */
-async function notifyProofSubmitted(faculty, club, event) {
+// Proof Submitted
+export async function notifyProofSubmitted(faculty, club, event) {
   try {
     const admins = await User.find({ role: "admin" }).select("_id email");
+
     const notifications = admins.map((a) => ({
       user: a._id,
       title: "Proof Submitted",
@@ -98,25 +105,32 @@ async function notifyProofSubmitted(faculty, club, event) {
       type: "info",
       relatedEvent: event._id,
     }));
-    if (notifications.length) await Notification.insertMany(notifications);
 
-    emitToRole("admin", "proof-submitted", { faculty: faculty.name, club: club.name, event });
+    if (notifications.length) {
+      await Notification.insertMany(notifications);
+    }
 
-    // Email to admins
-    const { proofSubmittedEmail } = require("./emailService");
+    emitToRole("admin", "proof-submitted", {
+      faculty: faculty.name,
+      club: club.name,
+      event,
+    });
+
     for (const admin of admins) {
-      const emailData = proofSubmittedEmail(faculty.name, club.name, event.name);
+      const emailData = proofSubmittedEmail(
+        faculty.name,
+        club.name,
+        event.name
+      );
       await sendEmail({ to: admin.email, ...emailData });
     }
   } catch (err) {
-    console.error("notifyProofSubmitted error:", err.message);
+    console.error("notifyProofSubmitted error:", err);
   }
 }
 
-/**
- * Notify faculty when admin reviews their proof.
- */
-async function notifyProofReviewed(faculty, event, status, remarks) {
+// Proof Reviewed
+export async function notifyProofReviewed(faculty, event, status, remarks) {
   try {
     await Notification.create({
       user: faculty._id,
@@ -126,21 +140,27 @@ async function notifyProofReviewed(faculty, event, status, remarks) {
       relatedEvent: event._id,
     });
 
-    emitToUser(faculty._id.toString(), "proof-reviewed", { event, status, remarks });
+    emitToUser(faculty._id.toString(), "proof-reviewed", {
+      event,
+      status,
+      remarks,
+    });
 
-    // Email
-    const { proofReviewEmail } = require("./emailService");
-    const emailData = proofReviewEmail(faculty.email, event.name, status, remarks);
+    const emailData = proofReviewEmail(
+      faculty.email,
+      event.name,
+      status,
+      remarks
+    );
+
     await sendEmail(emailData);
   } catch (err) {
-    console.error("notifyProofReviewed error:", err.message);
+    console.error("notifyProofReviewed error:", err);
   }
 }
 
-/**
- * Notify budget allocation.
- */
-async function notifyBudgetAllocated(faculty, club, amount) {
+// Budget Allocation
+export async function notifyBudgetAllocated(faculty, club, amount) {
   try {
     await Notification.create({
       user: faculty._id,
@@ -149,51 +169,57 @@ async function notifyBudgetAllocated(faculty, club, amount) {
       type: "success",
     });
 
-    emitToUser(faculty._id.toString(), "budget-allocated", { club: club.name, amount });
+    emitToUser(faculty._id.toString(), "budget-allocated", {
+      club: club.name,
+      amount,
+    });
 
-    const { budgetAllocatedEmail } = require("./emailService");
-    const emailData = budgetAllocatedEmail(faculty.email, faculty.name, club.name, amount);
+    const emailData = budgetAllocatedEmail(
+      faculty.email,
+      faculty.name,
+      club.name,
+      amount
+    );
+
     await sendEmail(emailData);
   } catch (err) {
-    console.error("notifyBudgetAllocated error:", err.message);
+    console.error("notifyBudgetAllocated error:", err);
   }
 }
 
-/**
- * Budget threshold alert (80%, 90%, 100%)
- */
-async function checkBudgetThreshold(club, totalUsed) {
+// Budget Threshold
+export async function checkBudgetThreshold(club, totalUsed) {
   try {
-    if (!club.budgetAllocated || club.budgetAllocated === 0) return;
+    if (!club.budgetAllocated) return;
+
     const percent = Math.round((totalUsed / club.budgetAllocated) * 100);
     const thresholds = [100, 90, 80];
 
     for (const t of thresholds) {
       if (percent >= t) {
-        const faculty = await User.find({ assignedClub: club._id, role: "faculty" });
+        const faculty = await User.find({
+          assignedClub: club._id,
+          role: "faculty",
+        });
+
         for (const f of faculty) {
-          emitToUser(f._id.toString(), "budget-alert", { club: club.name, percent });
+          emitToUser(f._id.toString(), "budget-alert", {
+            club: club.name,
+            percent,
+          });
+
           await Notification.create({
             user: f._id,
             title: `Budget Alert: ${percent}% used`,
-            description: `${club.name} has used ${percent}% of allocated budget`,
+            description: `${club.name} has used ${percent}% of budget`,
             type: percent >= 100 ? "warning" : "info",
           });
         }
-        break; // Only send the highest threshold
+
+        break;
       }
     }
   } catch (err) {
-    console.error("checkBudgetThreshold error:", err.message);
+    console.error("checkBudgetThreshold error:", err);
   }
 }
-
-module.exports = {
-  notifyNewEvent,
-  notifyEventStatusChange,
-  notifyEventRegistration,
-  notifyProofSubmitted,
-  notifyProofReviewed,
-  notifyBudgetAllocated,
-  checkBudgetThreshold,
-};

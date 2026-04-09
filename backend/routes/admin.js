@@ -1,184 +1,196 @@
-const express = require("express");
-const User = require("../models/User");
-const Club = require("../models/Club");
-const Event = require("../models/Event");
-const auth = require("../middleware/auth");
-const crypto = require("crypto");
-const { sendEmail, facultyCredentialsEmail } = require("../helpers/emailService");
-const { notifyProofReviewed, notifyBudgetAllocated } = require("../helpers/notifications");
-const { recalculateClubHealth, recalculateAllClubs } = require("../helpers/clubHealth");
+import express from "express";
+import User from "../models/User.js";
+import Club from "../models/Club.js";
+import Event from "../models/Event.js";
+import ProofSubmission from "../models/ProofSubmission.js";
+import BudgetRequest from "../models/Budget.js";
+
+import auth from "../middleware/auth.js";
+import permit from "../middleware/role.js";
+
+import { randomPassword, createToken } from "../utils/auth.js";
+import { sendEmail } from "../services/emailService.js";
+import { createNotification } from "../services/notificationService.js";
+import { recalculateClubHealth } from "../services/healthService.js";
+
 const router = express.Router();
+router.use(auth, permit("admin"));
 
-// GET /api/admin/faculty — list all faculty users with their assigned club
-router.get("/faculty", auth, async (req, res) => {
+// Helper email
+function createFacultyEmail(username, tempPassword, clubName, resetUrl) {
+  return {
+    html: `<p>Welcome to Club Hub.</p><p>You have been assigned to <strong>${clubName}</strong>.</p><p>Login: ${username}<br/>Temporary password: ${tempPassword}</p><p>Reset password: <a href="${resetUrl}">${resetUrl}</a></p>`,
+    text: `Login: ${username}, Temp password: ${tempPassword}, Reset: ${resetUrl}`,
+  };
+}
+
+// CREATE CLUB
+router.post("/create-club", async (req, res) => {
   try {
-    const faculty = await User.find({ role: "faculty" })
-      .select("_id name email assignedClub mustChangePassword")
-      .populate("assignedClub", "name")
-      .sort({ name: 1 });
-    res.json(faculty);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// PUT /api/admin/faculty/:id/assign — assign a club to faculty
-router.put("/faculty/:id/assign", auth, async (req, res) => {
-  try {
-    const { clubId } = req.body;
-    const user = await User.findById(req.params.id);
-    if (!user || user.role !== "faculty") return res.status(404).json({ message: "Faculty not found" });
-    user.assignedClub = clubId || null;
-    await user.save();
-    const updated = await User.findById(user._id).select("_id name email assignedClub").populate("assignedClub", "name");
-    res.json(updated);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// POST /api/admin/faculty — create a new faculty account + email credentials
-router.post("/faculty", auth, async (req, res) => {
-  try {
-    const { name, email, clubId } = req.body;
-    if (!name || !email) {
-      return res.status(400).json({ message: "Name and email are required" });
-    }
-    const existing = await User.findOne({ email });
-    if (existing) return res.status(400).json({ message: "Email already registered" });
-
-    // Auto-generate password
-    const tempPassword = crypto.randomBytes(6).toString("hex");
-    const user = await User.create({
-      name,
-      email,
-      password: tempPassword,
-      role: "faculty",
-      assignedClub: clubId || null,
-      mustChangePassword: true,
+    const club = await Club.create({
+      name: req.body.name,
+      description: req.body.description || "",
+      category: req.body.category || "other",
+      plannedEvents: Number(req.body.plannedEvents || 0),
+      budgetAllocated: Number(req.body.budgetAllocated || 0),
     });
 
-    // Get club name for email
-    let clubName = "Unassigned";
-    if (clubId) {
-      const club = await Club.findById(clubId);
-      if (club) clubName = club.name;
-    }
+    await createNotification({
+      userId: req.user._id,
+      title: "Club created",
+      message: `${club.name} created`,
+      type: "success",
+    });
 
-    // Send credentials email
-    const emailData = facultyCredentialsEmail(name, email, tempPassword, clubName);
-    await sendEmail(emailData);
-
-    const populated = await User.findById(user._id)
-      .select("_id name email assignedClub mustChangePassword")
-      .populate("assignedClub", "name");
-    res.status(201).json(populated);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(201).json(club);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
 
-// GET /api/admin/clubs/:id/events — get all events for a specific club with documents/photos
-router.get("/clubs/:id/events", auth, async (req, res) => {
+// ASSIGN FACULTY
+router.post("/assign-faculty", async (req, res) => {
   try {
-    const club = await Club.findById(req.params.id);
+    const { name, email, clubId } = req.body;
+
+    const club = await Club.findById(clubId);
     if (!club) return res.status(404).json({ message: "Club not found" });
-    const events = await Event.find({ club: club.name }).sort({ date: -1 });
-    res.json({ club, events });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+
+    let faculty = await User.findOne({ email: email.toLowerCase() });
+    const tempPassword = randomPassword();
+
+    if (!faculty) {
+      faculty = await User.create({
+        name,
+        email: email.toLowerCase(),
+        password: tempPassword,
+        role: "faculty",
+        emailVerified: true,
+        mustChangePassword: true,
+        assignedClubs: [club._id],
+      });
+    } else {
+      faculty.assignedClubs.push(club._id);
+      faculty.password = tempPassword;
+      faculty.mustChangePassword = true;
+      await faculty.save();
+    }
+
+    const resetToken = createToken();
+    faculty.resetToken = resetToken;
+    faculty.resetTokenExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await faculty.save();
+
+    const resetUrl = `${process.env.FRONTEND_URL}/set-password/${resetToken}`;
+    const emailBody = createFacultyEmail(faculty.email, tempPassword, club.name, resetUrl);
+
+    await sendEmail({
+      to: faculty.email,
+      subject: `Club assigned`,
+      html: emailBody.html,
+      text: emailBody.text,
+    });
+
+    res.json({ message: "Faculty assigned", faculty, club });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
 
-// PUT /api/admin/clubs/:id/budget — allocate budget to a club
-router.put("/clubs/:id/budget", auth, async (req, res) => {
+// ALLOCATE BUDGET
+router.post("/budget/allocate", async (req, res) => {
   try {
-    const { budgetAllocated } = req.body;
-    const club = await Club.findByIdAndUpdate(
-      req.params.id,
-      { budgetAllocated: Number(budgetAllocated) },
-      { new: true }
-    );
+    const { clubId, amount } = req.body;
+
+    const club = await Club.findById(clubId);
     if (!club) return res.status(404).json({ message: "Club not found" });
 
-    // Notify assigned faculty
-    const faculty = await User.find({ assignedClub: club._id, role: "faculty" });
-    for (const f of faculty) {
-      await notifyBudgetAllocated(f, club, Number(budgetAllocated));
-    }
+    club.budgetAllocated = Number(amount);
+    await club.save();
+
+    await recalculateClubHealth(club._id);
 
     res.json(club);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
 
-// PUT /api/admin/events/:id/review-proof — approve/reject event proofs
-router.put("/events/:id/review-proof", auth, async (req, res) => {
+// EVENTS + PROOFS
+router.get("/clubs/:id/events", async (req, res) => {
   try {
-    const { status, remarks } = req.body;
-    if (!["approved", "rejected"].includes(status)) {
-      return res.status(400).json({ message: "Status must be approved or rejected" });
-    }
+    const events = await Event.find({ clubId: req.params.id });
+    const proofs = await ProofSubmission.find({ clubId: req.params.id });
 
-    const event = await Event.findById(req.params.id);
-    if (!event) return res.status(404).json({ message: "Event not found" });
-
-    event.proofStatus = status;
-    event.proofRemarks = remarks || "";
-    await event.save();
-
-    // Find the faculty for this club and notify them
-    const club = await Club.findOne({ name: event.club });
-    if (club) {
-      const faculty = await User.find({ assignedClub: club._id, role: "faculty" });
-      for (const f of faculty) {
-        await notifyProofReviewed(f, event, status, remarks);
-      }
-      // Recalculate club health after proof review
-      await recalculateClubHealth(club._id);
-    }
-
-    res.json(event);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.json({ events, proofs });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
 
-// POST /api/admin/recalculate-health — manually trigger health recalculation
-router.post("/recalculate-health", auth, async (req, res) => {
+// GET FACULTY
+router.get("/faculty", async (_req, res) => {
   try {
-    const results = await recalculateAllClubs();
-    res.json({ message: "Health recalculated", results });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+    const faculty = await User.find({ role: "faculty" }).populate("assignedClubs", "name");
+    res.json(faculty);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
 
-// GET /api/admin/budget-overview — budget overview per club with faculty info
-router.get("/budget-overview", auth, async (req, res) => {
+// GET USERS
+router.get("/users", async (_req, res) => {
   try {
-    const clubs = await Club.find().sort({ name: 1 });
-    const overview = [];
-
-    for (const club of clubs) {
-      const faculty = await User.findOne({ assignedClub: club._id, role: "faculty" }).select("name email");
-      const events = await Event.find({ club: club.name });
-      const totalUsed = events.reduce((sum, e) => sum + (e.budgetUsed || 0), 0);
-
-      overview.push({
-        club: { _id: club._id, name: club.name },
-        faculty: faculty ? { name: faculty.name, email: faculty.email } : null,
-        budgetAllocated: club.budgetAllocated || 0,
-        budgetUsed: totalUsed,
-        eventCount: events.length,
-      });
-    }
-
-    res.json(overview);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+    const users = await User.find().populate("assignedClubs", "name");
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
 
-module.exports = router;
+// BUDGET REQUESTS
+router.get("/budget/requests", async (_req, res) => {
+  try {
+    const requests = await BudgetRequest.find()
+      .populate("clubId", "name")
+      .populate("facultyId", "name email")
+      .populate("eventId", "name");
+
+    res.json(requests);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// APPROVE / REJECT BUDGET
+router.put("/budget/requests/:id", async (req, res) => {
+  try {
+    const request = await BudgetRequest.findById(req.params.id);
+
+    request.status = req.body.status;
+    request.remarks = req.body.remarks || "";
+    request.decidedAt = new Date();
+
+    await request.save();
+
+    res.json(request);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// GET PROOFS
+router.get("/proofs", async (_req, res) => {
+  try {
+    const proofs = await ProofSubmission.find()
+      .populate("eventId")
+      .populate("clubId")
+      .populate("facultyId");
+
+    res.json(proofs);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+export default router;

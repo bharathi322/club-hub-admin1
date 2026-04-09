@@ -1,43 +1,61 @@
-const express = require("express");
-const Notification = require("../models/Notification");
-const auth = require("../middleware/auth");
-const router = express.Router();
+import express from "express";
+import Notification from "../models/Notification.js";
+import auth from "../middleware/auth.js";
+import { getIo } from "../socket.js";
 
-// GET /api/notifications — current user's notifications
+const router = express.Router();
+export async function checkEventRisk(event) {
+  try {
+    let risk = "low";
+
+    if (event.budgetSpent > event.budgetApproved) {
+      risk = "high";
+    } else if (event.attendanceRate < 50) {
+      risk = "medium";
+    }
+
+    return risk;
+  } catch (err) {
+    console.error("checkEventRisk error:", err);
+    return "low";
+  }
+}
+
 router.get("/", auth, async (req, res) => {
   try {
-    const notifications = await Notification.find({ user: req.user.id })
-      .sort({ createdAt: -1 })
-      .limit(30);
+    const notifications = await Notification.find({ userId: req.user._id }).sort({ createdAt: -1 });
     res.json(notifications);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
 
-// PATCH /api/notifications/:id/read — mark one as read
 router.patch("/:id/read", auth, async (req, res) => {
   try {
-    const notif = await Notification.findOneAndUpdate(
-      { _id: req.params.id, user: req.user.id },
+    const notification = await Notification.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user._id },
       { read: true },
       { new: true }
     );
-    if (!notif) return res.status(404).json({ message: "Not found" });
-    res.json(notif);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+    if (!notification) {
+      return res.status(404).json({ message: "Notification not found" });
+    }
+
+    getIo().to(String(req.user._id)).emit("notification:updated", notification);
+    res.json(notification);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
 
-// PATCH /api/notifications/read-all — mark all as read
 router.patch("/read-all", auth, async (req, res) => {
   try {
-    await Notification.updateMany({ user: req.user.id, read: false }, { read: true });
-    res.json({ message: "All marked as read" });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+    await Notification.updateMany({ userId: req.user._id, read: false }, { read: true });
+    getIo().to(String(req.user._id)).emit("notification:cleared", { userId: String(req.user._id) });
+    res.json({ message: "All notifications marked as read" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
 
-module.exports = router;
+export default router;

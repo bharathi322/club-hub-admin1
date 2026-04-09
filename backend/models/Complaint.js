@@ -1,8 +1,37 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
-const complaintSchema = new mongoose.Schema({
-  text: { type: String, required: true },
-  type: { type: String, enum: ["alert", "rating"], default: "alert" },
-}, { timestamps: true });
+const complaintSchema = new mongoose.Schema(
+  {
+    studentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
+    },
+    clubId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Club",
+      default: null,
+      index: true,
+    },
+    eventId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Event",
+      default: null,
+    },
+    content: { type: String, required: true, trim: true },
+    status: {
+      type: String,
+      enum: ["open", "reviewing", "resolved"],
+      default: "open",
+    },
+    severity: {
+      type: String,
+      enum: ["low", "medium", "high"],
+      default: "medium",
+    },
+  },
+  { timestamps: true }
+);
 
-module.exports = mongoose.model("Complaint", complaintSchema);
+export default mongoose.model("Complaint", complaintSchema);

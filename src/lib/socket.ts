@@ -1,17 +1,20 @@
 import { io, Socket } from "socket.io-client";
 
-const SOCKET_URL = import.meta.env.VITE_API_URL?.replace("/api", "") || "http://localhost:5000";
+const SOCKET_URL =
+  import.meta.env.VITE_API_URL?.replace("/api", "") ||
+  "http://localhost:5000";
 
-let socket: Socket | null = null;
+// rename to avoid conflict
+let socketInstance: Socket | null = null;
 
 export function getSocket(): Socket {
-  if (!socket) {
-    socket = io(SOCKET_URL, {
+  if (!socketInstance) {
+    socketInstance = io(SOCKET_URL, {
       autoConnect: false,
       transports: ["websocket", "polling"],
     });
   }
-  return socket;
+  return socketInstance;
 }
 
 export function connectSocket(userId: string, role: string) {
@@ -24,7 +27,10 @@ export function connectSocket(userId: string, role: string) {
 }
 
 export function disconnectSocket() {
-  if (socket?.connected) {
-    socket.disconnect();
+  if (socketInstance?.connected) {
+    socketInstance.disconnect();
   }
 }
+
+// ✅ THIS LINE IS REQUIRED
+export const socket = getSocket();

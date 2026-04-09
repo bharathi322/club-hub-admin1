@@ -2,33 +2,65 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useFacultyEvents, useFacultyRegistrations } from "@/hooks/use-dashboard-api";
-import { useMarkAttendance, useBulkMarkAttendance } from "@/hooks/use-mutations";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  useFacultyEvents,
+  useFacultyRegistrations,
+} from "@/hooks/use-dashboard-api";
+import {
+  useMarkAttendance,
+  useBulkMarkAttendance,
+} from "@/hooks/use-mutations";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { CheckCircle, Users, CheckCheck, Download } from "lucide-react";
 
 const FacultyAttendance = () => {
-  const { data: events, isLoading: eventsLoading } = useFacultyEvents();
-  const { data: registrations, isLoading: regsLoading } = useFacultyRegistrations();
+  const { data: events = [], isLoading: eventsLoading } = useFacultyEvents();
+  const { data: registrations = [], isLoading: regsLoading } =
+    useFacultyRegistrations();
+
   const markAttendance = useMarkAttendance();
   const bulkMark = useBulkMarkAttendance();
   const { toast } = useToast();
+
   const [selectedEvent, setSelectedEvent] = useState<string>("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  const filtered = registrations?.filter(
-    (r: any) => selectedEvent === "all" || r.event?._id === selectedEvent
-  ) ?? [];
+  // ✅ SAFE FILTER
+  const filtered =
+    registrations?.filter(
+      (r: any) =>
+        selectedEvent === "all" || r?.event?._id === selectedEvent
+    ) ?? [];
 
-  const attendedCount = filtered.filter((r: any) => r.status === "attended").length;
-  const unattendedFiltered = filtered.filter((r: any) => r.status !== "attended");
+  const attendedCount = filtered.filter(
+    (r: any) => r?.status === "attended"
+  ).length;
 
-  const allSelected = unattendedFiltered.length > 0 && unattendedFiltered.every((r: any) => selectedIds.has(r._id));
+  const unattendedFiltered = filtered.filter(
+    (r: any) => r?.status !== "attended"
+  );
+
+  const allSelected =
+    unattendedFiltered.length > 0 &&
+    unattendedFiltered.every((r: any) => selectedIds.has(r._id));
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -42,17 +74,28 @@ const FacultyAttendance = () => {
     if (allSelected) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(unattendedFiltered.map((r: any) => r._id)));
+      setSelectedIds(
+        new Set(unattendedFiltered.map((r: any) => r._id))
+      );
     }
   };
 
   const handleToggle = (reg: any) => {
-    const newStatus = reg.status === "attended" ? "registered" : "attended";
+    const newStatus =
+      reg.status === "attended" ? "registered" : "attended";
+
     markAttendance.mutate(
       { id: reg._id, status: newStatus },
       {
-        onSuccess: () => toast({ title: `Marked as ${newStatus}` }),
-        onError: (err: any) => toast({ title: "Error", description: err.response?.data?.message || "Failed", variant: "destructive" }),
+        onSuccess: () =>
+          toast({ title: `Marked as ${newStatus}` }),
+        onError: (err: any) =>
+          toast({
+            title: "Error",
+            description:
+              err.response?.data?.message || "Failed",
+            variant: "destructive",
+          }),
       }
     );
   };
@@ -60,14 +103,25 @@ const FacultyAttendance = () => {
   const handleBulkMark = () => {
     const ids = Array.from(selectedIds);
     if (!ids.length) return;
+
     bulkMark.mutate(
       { ids, status: "attended" },
       {
         onSuccess: (data: any) => {
-          toast({ title: `${data.count ?? ids.length} students marked as attended` });
+          toast({
+            title: `${
+              data.count ?? ids.length
+            } students marked as attended`,
+          });
           setSelectedIds(new Set());
         },
-        onError: (err: any) => toast({ title: "Error", description: err.response?.data?.message || "Failed", variant: "destructive" }),
+        onError: (err: any) =>
+          toast({
+            title: "Error",
+            description:
+              err.response?.data?.message || "Failed",
+            variant: "destructive",
+          }),
       }
     );
   };
@@ -75,33 +129,60 @@ const FacultyAttendance = () => {
   const isLoading = eventsLoading || regsLoading;
   const isBusy = markAttendance.isPending || bulkMark.isPending;
 
+  // ✅ SAFE EXPORT
   const handleExportCSV = () => {
     if (!filtered.length) return;
+
     const headers = ["Student", "Email", "Event", "Status"];
+
     const rows = filtered.map((r: any) => [
-      r.student?.name ?? "—",
-      r.student?.email ?? "—",
-      r.event?.name ?? "—",
-      r.status,
+      r?.student?.name ?? "—",
+      r?.student?.email ?? "—",
+      r?.event?.name ?? "—",
+      r?.status ?? "—",
     ]);
-    const csv = [headers, ...rows].map((row) => row.map((v: string) => `"${v}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+
+    const csv = [headers, ...rows]
+      .map((row) =>
+        row.map((v: string) => `"${v}"`).join(",")
+      )
+      .join("\n");
+
+    const blob = new Blob([csv], {
+      type: "text/csv;charset=utf-8;",
+    });
+
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `attendance-report${selectedEvent !== "all" ? `-${events?.find((e: any) => e._id === selectedEvent)?.name ?? selectedEvent}` : ""}.csv`;
+
+    const eventName =
+      events?.find((e: any) => e._id === selectedEvent)
+        ?.name ?? selectedEvent;
+
+    a.download = `attendance-report${
+      selectedEvent !== "all" ? `-${eventName}` : ""
+    }.csv`;
+
     a.click();
     URL.revokeObjectURL(url);
+
     toast({ title: "CSV exported successfully" });
   };
 
   return (
     <div className="p-6 space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Attendance Tracking</h1>
-          <p className="text-sm text-muted-foreground">Mark students as attended for your club's events</p>
+          <h1 className="text-2xl font-bold text-foreground">
+            Attendance Tracking
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Mark students as attended for your club's events
+          </p>
         </div>
+
         <div className="flex items-center gap-3">
           {selectedIds.size > 0 && (
             <Button
@@ -113,6 +194,7 @@ const FacultyAttendance = () => {
               Mark {selectedIds.size} as Attended
             </Button>
           )}
+
           <Button
             variant="outline"
             className="gap-2"
@@ -122,14 +204,25 @@ const FacultyAttendance = () => {
             <Download className="h-4 w-4" />
             Export CSV
           </Button>
-          <Select value={selectedEvent} onValueChange={(v) => { setSelectedEvent(v); setSelectedIds(new Set()); }}>
+
+          <Select
+            value={selectedEvent}
+            onValueChange={(v) => {
+              setSelectedEvent(v);
+              setSelectedIds(new Set());
+            }}
+          >
             <SelectTrigger className="w-[220px]">
               <SelectValue placeholder="Filter by event" />
             </SelectTrigger>
+
             <SelectContent>
               <SelectItem value="all">All Events</SelectItem>
-              {events?.map((e: any) => (
-                <SelectItem key={e._id} value={e._id}>{e.name}</SelectItem>
+
+              {events.map((e: any) => (
+                <SelectItem key={e._id} value={e._id}>
+                  {e.name}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -142,39 +235,61 @@ const FacultyAttendance = () => {
           <CardContent className="pt-4 flex items-center gap-3">
             <Users className="h-5 w-5 text-muted-foreground" />
             <div>
-              <p className="text-2xl font-bold text-foreground">{filtered.length}</p>
-              <p className="text-xs text-muted-foreground">Total Registered</p>
+              <p className="text-2xl font-bold">
+                {filtered.length}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Total Registered
+              </p>
             </div>
           </CardContent>
         </Card>
+
         <Card className="shadow-card">
           <CardContent className="pt-4 flex items-center gap-3">
             <CheckCircle className="h-5 w-5 text-primary" />
             <div>
-              <p className="text-2xl font-bold text-foreground">{attendedCount}</p>
-              <p className="text-xs text-muted-foreground">Attended</p>
+              <p className="text-2xl font-bold">
+                {attendedCount}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Attended
+              </p>
             </div>
           </CardContent>
         </Card>
+
         <Card className="shadow-card">
           <CardContent className="pt-4 flex items-center gap-3">
-            <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground">%</div>
+            <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center text-xs font-bold">
+              %
+            </div>
             <div>
-              <p className="text-2xl font-bold text-foreground">
-                {filtered.length ? Math.round((attendedCount / filtered.length) * 100) : 0}%
+              <p className="text-2xl font-bold">
+                {filtered.length
+                  ? Math.round(
+                      (attendedCount / filtered.length) * 100
+                    )
+                  : 0}
+                %
               </p>
-              <p className="text-xs text-muted-foreground">Attendance Rate</p>
+              <p className="text-xs text-muted-foreground">
+                Attendance Rate
+              </p>
             </div>
           </CardContent>
         </Card>
       </div>
 
+      {/* Table */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
         <Card className="shadow-card">
           <CardContent className="pt-4">
             {isLoading ? (
               <div className="space-y-2">
-                {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 rounded" />)}
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Skeleton key={i} className="h-10 rounded" />
+                ))}
               </div>
             ) : filtered.length ? (
               <Table>
@@ -184,8 +299,10 @@ const FacultyAttendance = () => {
                       <Checkbox
                         checked={allSelected}
                         onCheckedChange={toggleSelectAll}
-                        disabled={isBusy || unattendedFiltered.length === 0}
-                        aria-label="Select all unattended"
+                        disabled={
+                          isBusy ||
+                          unattendedFiltered.length === 0
+                        }
                       />
                     </TableHead>
                     <TableHead>Student</TableHead>
@@ -194,33 +311,48 @@ const FacultyAttendance = () => {
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
+
                 <TableBody>
                   {filtered.map((reg: any) => {
-                    const isAttended = reg.status === "attended";
+                    const isAttended =
+                      reg.status === "attended";
+
                     return (
-                      <TableRow key={reg._id} className={selectedIds.has(reg._id) ? "bg-accent/30" : ""}>
+                      <TableRow key={reg._id}>
                         <TableCell>
-                          {isAttended ? (
-                            <Checkbox
-                              checked
-                              onCheckedChange={() => handleToggle(reg)}
-                              disabled={isBusy}
-                            />
-                          ) : (
-                            <Checkbox
-                              checked={selectedIds.has(reg._id)}
-                              onCheckedChange={() => toggleSelect(reg._id)}
-                              disabled={isBusy}
-                            />
-                          )}
+                          <Checkbox
+                            checked={
+                              isAttended ||
+                              selectedIds.has(reg._id)
+                            }
+                            onCheckedChange={() =>
+                              isAttended
+                                ? handleToggle(reg)
+                                : toggleSelect(reg._id)
+                            }
+                            disabled={isBusy}
+                          />
                         </TableCell>
-                        <TableCell className="font-medium">{reg.student?.name ?? "—"}</TableCell>
-                        <TableCell className="text-muted-foreground">{reg.student?.email ?? "—"}</TableCell>
-                        <TableCell>{reg.event?.name ?? "—"}</TableCell>
+
+                        <TableCell>
+                          {reg?.student?.name ?? "—"}
+                        </TableCell>
+
+                        <TableCell>
+                          {reg?.student?.email ?? "—"}
+                        </TableCell>
+
+                        <TableCell>
+                          {reg?.event?.name ?? "—"}
+                        </TableCell>
+
                         <TableCell>
                           <Badge
-                            variant={isAttended ? "default" : "secondary"}
-                            className="capitalize"
+                            variant={
+                              isAttended
+                                ? "default"
+                                : "secondary"
+                            }
                           >
                             {reg.status}
                           </Badge>
@@ -231,7 +363,9 @@ const FacultyAttendance = () => {
                 </TableBody>
               </Table>
             ) : (
-              <p className="text-center text-muted-foreground py-8">No registrations found.</p>
+              <p className="text-center py-8 text-muted-foreground">
+                No registrations found.
+              </p>
             )}
           </CardContent>
         </Card>

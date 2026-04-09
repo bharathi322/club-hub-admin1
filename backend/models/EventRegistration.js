@@ -1,11 +1,31 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
-const eventRegistrationSchema = new mongoose.Schema({
-  event: { type: mongoose.Schema.Types.ObjectId, ref: "Event", required: true },
-  student: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-  status: { type: String, enum: ["registered", "attended", "cancelled"], default: "registered" },
-}, { timestamps: true });
+const eventRegistrationSchema = new mongoose.Schema(
+  {
+    eventId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Event",
+      required: true,
+      index: true,
+    },
+    studentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
+    },
+    status: {
+      type: String,
+      enum: ["registered", "cancelled", "attended"],
+      default: "registered",
+    },
+    confirmationCode: { type: String, required: true, trim: true },
+    reminderSentAt: { type: Date, default: null },
+    cancelledAt: { type: Date, default: null },
+  },
+  { timestamps: true }
+);
 
-eventRegistrationSchema.index({ event: 1, student: 1 }, { unique: true });
+eventRegistrationSchema.index({ eventId: 1, studentId: 1 }, { unique: true });
 
-module.exports = mongoose.model("EventRegistration", eventRegistrationSchema);
+export default mongoose.model("EventRegistration", eventRegistrationSchema);

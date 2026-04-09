@@ -1,25 +1,24 @@
-const express = require("express");
-const crypto = require("crypto");
-const Event = require("../models/Event");
-const EventRegistration = require("../models/EventRegistration");
-const User = require("../models/User");
-const auth = require("../middleware/auth");
-const { emitToUser, emitToRole } = require("../helpers/socketManager");
+import express from "express";
+import crypto from "crypto";
+import Event from "../models/Event.js";
+import EventRegistration from "../models/EventRegistration.js";
+import User from "../models/User.js";
+import auth from "../middleware/auth.js";
+import { emitToUser, emitToRole } from "../socketManager.js";
 const router = express.Router();
 
-// POST /api/attendance/generate-qr/:eventId — Generate QR code token for event
+// Generate QR
 router.post("/generate-qr/:eventId", auth, async (req, res) => {
   try {
     const event = await Event.findById(req.params.eventId);
     if (!event) return res.status(404).json({ message: "Event not found" });
 
-    // Verify faculty owns this event
     const user = await User.findById(req.user.id).populate("assignedClub");
+
     if (user.role === "faculty" && user.assignedClub?.name !== event.club) {
       return res.status(403).json({ message: "Not your club's event" });
     }
 
-    // Generate unique QR token
     const qrToken = crypto.randomBytes(32).toString("hex");
     event.qrCode = qrToken;
     await event.save();
@@ -30,7 +29,7 @@ router.post("/generate-qr/:eventId", auth, async (req, res) => {
   }
 });
 
-// POST /api/attendance/scan — Student scans QR code
+// Scan QR
 router.post("/scan", auth, async (req, res) => {
   try {
     const { qrToken } = req.body;
@@ -39,38 +38,41 @@ router.post("/scan", auth, async (req, res) => {
     const event = await Event.findOne({ qrCode: qrToken });
     if (!event) return res.status(404).json({ message: "Invalid QR code" });
 
-    // Check if student is registered
     const reg = await EventRegistration.findOne({
       event: event._id,
       student: req.user.id,
     });
 
-    if (!reg) return res.status(400).json({ message: "You are not registered for this event" });
-    if (reg.status === "attended") return res.status(400).json({ message: "Already checked in" });
-
-    // Check time window (allow check-in from 1 hour before to 3 hours after event time)
-    // Simple check: just verify the date matches
-    const today = new Date().toISOString().split("T")[0];
-    if (event.date !== today) {
-      return res.status(400).json({ message: "Check-in is only available on the event day" });
+    if (!reg) {
+      return res.status(400).json({ message: "Not registered for this event" });
     }
 
-    // Mark as attended
+    if (reg.status === "attended") {
+      return res.status(400).json({ message: "Already checked in" });
+    }
+
+    const today = new Date().toISOString().split("T")[0];
+    if (event.date !== today) {
+      return res.status(400).json({ message: "Check-in only on event day" });
+    }
+
     reg.status = "attended";
     await reg.save();
 
     const student = await User.findById(req.user.id).select("name email");
 
-    // Real-time update to faculty
     emitToRole("faculty", "attendance-update", {
       eventId: event._id.toString(),
       eventName: event.name,
-      student: { _id: req.user.id, name: student.name, email: student.email },
+      student: {
+        _id: req.user.id,
+        name: student.name,
+        email: student.email,
+      },
       status: "attended",
       timestamp: new Date(),
     });
 
-    // Real-time update to admin
     emitToRole("admin", "attendance-update", {
       eventId: event._id.toString(),
       eventName: event.name,
@@ -78,7 +80,7 @@ router.post("/scan", auth, async (req, res) => {
     });
 
     res.json({
-      message: "Check-in successful!",
+      message: "Check-in successful",
       event: { _id: event._id, name: event.name, club: event.club },
       status: "attended",
     });
@@ -87,7 +89,7 @@ router.post("/scan", auth, async (req, res) => {
   }
 });
 
-// GET /api/attendance/:eventId/live — Get live attendance for event
+// Live attendance
 router.get("/:eventId/live", auth, async (req, res) => {
   try {
     const regs = await EventRegistration.find({ event: req.params.eventId })
@@ -112,4 +114,4 @@ router.get("/:eventId/live", auth, async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

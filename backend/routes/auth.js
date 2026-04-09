@@ -1,77 +1,167 @@
-const express = require("express");
-const jwt = require("jsonwebtoken");
-const User = require("../models/User");
-const auth = require("../middleware/auth");
+import express from "express";
+import User from "../models/User.js";
+import { signToken, randomNumericCode, createToken } from "../utils/auth.js";
+import { sendEmail } from "../services/emailService.js";
+import bcrypt from "bcryptjs";
+
 const router = express.Router();
 
-// POST /api/auth/signup
-router.post("/signup", async (req, res) => {
-  try {
-    const { name, email, password, role } = req.body;
-    const existing = await User.findOne({ email });
-    if (existing) return res.status(400).json({ message: "Email already registered" });
+function safeUser(user) {
+  return user.toSafeObject ? user.toSafeObject() : user;
+}
 
-    // Only allow student signup; faculty is created by admin
-    const userRole = role === "student" ? "student" : "student";
-
-    const user = await User.create({ name, email, password, role: userRole });
-    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "7d" });
-
-    res.status(201).json({
-      token,
-      user: { _id: user._id, name: user.name, email: user.email, role: user.role, mustChangePassword: false },
-    });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// POST /api/auth/login
+// LOGIN
 router.post("/login", async (req, res) => {
+  console.log("LOGIN API HIT");
+
   try {
     const { email, password } = req.body;
-    const user = await User.findOne({ email });
-    if (!user) return res.status(401).json({ message: "Invalid credentials" });
 
-    const isMatch = await user.comparePassword(password);
-    if (!isMatch) return res.status(401).json({ message: "Invalid credentials" });
+    const user = await User.findOne({ email: email.toLowerCase() });
 
-    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "7d" });
+    console.log("USER:", user?.email);
 
-    res.json({
-      token,
-      user: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        mustChangePassword: user.mustChangePassword || false,
-      },
+    const valid = await bcrypt.compare(password, user.password);
+    console.log("PASSWORD MATCH:", valid);
+
+    if (!valid) return res.status(401).json({ message: "Invalid credentials" });
+
+    return res.json({
+      token: signToken(user._id),
+      user: safeUser(user),
     });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+
+  } catch (error) {
+    console.log("ERROR:", error);
+    return res.status(500).json({ message: error.message });
   }
 });
 
-// POST /api/auth/change-password — forced password change for faculty
-router.post("/change-password", auth, async (req, res) => {
+// REGISTER (student)
+router.post("/register", async (req, res) => {
   try {
-    const { newPassword } = req.body;
-    if (!newPassword || newPassword.length < 6) {
-      return res.status(400).json({ message: "Password must be at least 6 characters" });
+    const { name, email, password, studentId, department, year } = req.body;
+
+    const existing = await User.findOne({
+      $or: [{ email: email.toLowerCase() }, { studentId }],
+    });
+    if (existing) {
+      return res.status(400).json({ message: "User already exists" });
     }
 
-    const user = await User.findById(req.user.id);
-    if (!user) return res.status(404).json({ message: "User not found" });
+    const otp = randomNumericCode(6);
 
-    user.password = newPassword;
-    user.mustChangePassword = false;
-    await user.save();
+    const user = await User.create({
+      name,
+      email: email.toLowerCase(),
+      password,
+      studentId,
+      department,
+      year,
+      role: "student",
+      otp,
+      otpExpiry: new Date(Date.now() + 10 * 60 * 1000),
+      emailVerified: false,
+    });
 
-    res.json({ message: "Password changed successfully" });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+    await sendEmail({
+      to: user.email,
+      subject: "Verify account",
+      html: `<p>Your OTP is <b>${otp}</b></p>`,
+      text: `OTP: ${otp}`,
+    });
+
+    res.json({ message: "OTP sent", email: user.email });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
 
-module.exports = router;
+// VERIFY OTP
+router.post("/verify-otp", async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user || user.otp !== otp || user.otpExpiry < new Date()) {
+      return res.status(400).json({ message: "Invalid OTP" });
+    }
+
+    user.emailVerified = true;
+    user.otp = null;
+    user.otpExpiry = null;
+    await user.save();
+
+    res.json({
+      token: signToken(user._id),
+      user: safeUser(user),
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// CHANGE PASSWORD
+router.post("/change-password", async (req, res) => {
+  try {
+    const { email, currentPassword, newPassword, token } = req.body;
+
+    const user = token
+      ? await User.findOne({ resetToken: token, resetTokenExpiry: { $gt: new Date() } })
+      : await User.findOne({ email: email.toLowerCase() });
+
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (!token) {
+const valid = await bcrypt.compare(password, user.password);
+console.log("PASSWORD MATCH:", valid);
+      if (!valid) return res.status(401).json({ message: "Wrong password" });
+    }
+
+    user.password = newPassword;
+    user.resetToken = null;
+    user.resetTokenExpiry = null;
+    user.mustChangePassword = false;
+
+    await user.save();
+
+    res.json({
+      message: "Password updated",
+      token: signToken(user._id),
+      user: safeUser(user),
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// FORGOT PASSWORD
+router.post("/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) return res.json({ message: "If exists, email sent" });
+
+    const resetToken = createToken();
+    user.resetToken = resetToken;
+    user.resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000);
+
+    await user.save();
+
+    const resetUrl = `${process.env.FRONTEND_URL}/set-password/${resetToken}`;
+
+    await sendEmail({
+      to: user.email,
+      subject: "Reset password",
+      html: `<a href="${resetUrl}">Reset</a>`,
+      text: resetUrl,
+    });
+
+    res.json({ message: "Reset email sent" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+export default router;

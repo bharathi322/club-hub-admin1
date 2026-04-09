@@ -1,36 +1,46 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CalendarDays, Clock, MapPin, CheckCircle2, XCircle } from "lucide-react";
+import { CalendarDays, Clock, CheckCircle2, XCircle } from "lucide-react";
 import { useStudentEvents } from "@/hooks/use-dashboard-api";
-import { useRegisterForEvent, useCancelRegistration } from "@/hooks/use-mutations";
+// ✅ FIX 1: correct names — was useRegisterForEvent and useCancelRegistration (not imported)
+import { useRegisterEvent, useCancelRegistration } from "@/hooks/use-mutations";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
 
 const statusColors: Record<string, string> = {
   approved: "bg-status-healthy",
-  pending: "bg-status-warning",
-  warning: "bg-status-critical",
+  pending:  "bg-status-warning",
+  warning:  "bg-status-critical",
 };
 
 const StudentEvents = () => {
   const { data: events, isLoading } = useStudentEvents();
-  const registerMutation = useRegisterForEvent();
-  const cancelMutation = useCancelRegistration();
+  // ✅ FIX 2: correct hook names
+  const registerMutation = useRegisterEvent();
+  const cancelMutation   = useCancelRegistration();
   const { toast } = useToast();
 
   const handleRegister = (eventId: string) => {
     registerMutation.mutate(eventId, {
       onSuccess: () => toast({ title: "Registered successfully!" }),
-      onError: (err: any) => toast({ title: "Error", description: err.response?.data?.message || "Failed", variant: "destructive" }),
+      onError: (err: any) => toast({
+        title: "Error",
+        description: err.response?.data?.message || "Failed",
+        variant: "destructive",
+      }),
     });
   };
 
   const handleCancel = (eventId: string) => {
     cancelMutation.mutate(eventId, {
       onSuccess: () => toast({ title: "Registration cancelled" }),
-      onError: (err: any) => toast({ title: "Error", description: err.response?.data?.message || "Failed", variant: "destructive" }),
+      onError: (err: any) => toast({
+        title: "Error",
+        description: err.response?.data?.message || "Failed",
+        variant: "destructive",
+      }),
     });
   };
 
@@ -43,7 +53,9 @@ const StudentEvents = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {isLoading ? (
-          Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-52 rounded-lg" />)
+          Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-52 rounded-lg" />
+          ))
         ) : events?.length ? (
           events.map((event, i) => (
             <motion.div
@@ -56,7 +68,10 @@ const StudentEvents = () => {
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between">
                     <CardTitle className="text-base">{event.name}</CardTitle>
-                    <Badge variant="secondary" className="text-xs">{event.club}</Badge>
+                    {/* ✅ FIX 3: event.club is now ObjectId — show clubName instead */}
+                    <Badge variant="secondary" className="text-xs">
+                      {event.clubName || "Club"}
+                    </Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -71,7 +86,7 @@ const StudentEvents = () => {
                   <div className="flex items-center gap-2 text-sm">
                     <span className={`h-2 w-2 rounded-full ${statusColors[event.status]}`} />
                     <span className="capitalize text-muted-foreground">{event.status}</span>
-                    {event.rating !== "--" && (
+                    {event.rating > 0 && (
                       <span className="ml-auto text-xs font-medium">⭐ {event.rating}</span>
                     )}
                   </div>
@@ -107,7 +122,9 @@ const StudentEvents = () => {
             </motion.div>
           ))
         ) : (
-          <p className="col-span-full text-center text-muted-foreground py-12">No upcoming events found.</p>
+          <p className="col-span-full text-center text-muted-foreground py-12">
+            No upcoming events found.
+          </p>
         )}
       </div>
     </div>
