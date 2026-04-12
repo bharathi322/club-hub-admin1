@@ -6,14 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Plus, Pencil, Trash2, CalendarDays, Clock } from "lucide-react";
-
 import { useFacultyEvents } from "@/hooks/use-dashboard-api";
 import {
   useCreateEvent,
   useUpdateEvent,
   useDeleteEvent,
 } from "@/hooks/use-mutations";
-
 import { Skeleton } from "@/components/ui/skeleton";
 import EventFormDialog from "@/components/dashboard/EventFormDialog";
 import DeleteConfirmDialog from "@/components/dashboard/DeleteConfirmDialog";
@@ -22,9 +20,9 @@ import type { Event } from "@/types/api";
 import { motion } from "framer-motion";
 
 const statusDot: Record<string, string> = {
-  approved: "bg-[hsl(var(--status-healthy))]",
-  pending: "bg-[hsl(var(--status-warning))]",
-  rejected: "bg-[hsl(var(--status-critical))]",
+  approved: "bg-status-healthy",
+  pending: "bg-status-warning",
+  warning: "bg-status-critical",
 };
 
 const FacultyEvents = () => {
@@ -42,8 +40,9 @@ const FacultyEvents = () => {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // SOCKET REAL-TIME
+  // ✅ REAL-TIME SOCKET FIX (IMPORTANT)
   useEffect(() => {
+    // CREATE
     socket.on("eventCreated", (newEvent) => {
       queryClient.setQueryData(["faculty-events"], (old: any) => {
         if (!old) return [newEvent];
@@ -51,6 +50,7 @@ const FacultyEvents = () => {
       });
     });
 
+    // UPDATE
     socket.on("eventUpdated", (updatedEvent) => {
       queryClient.setQueryData(["faculty-events"], (old: any) => {
         if (!old) return [];
@@ -60,6 +60,7 @@ const FacultyEvents = () => {
       });
     });
 
+    // DELETE
     socket.on("eventDeleted", (id) => {
       queryClient.setQueryData(["faculty-events"], (old: any) => {
         if (!old) return [];
@@ -116,14 +117,16 @@ const FacultyEvents = () => {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Club Events</h1>
+          <h1 className="text-2xl font-bold text-foreground">
+            Club Events
+          </h1>
           <p className="text-sm text-muted-foreground">
             Manage events for your club
           </p>
         </div>
 
         <Button
-          className="gap-2"
+          className="gap-2 bg-gradient-primary border-0 hover:opacity-90"
           onClick={() => {
             setEditingEvent(null);
             setFormOpen(true);
@@ -147,50 +150,54 @@ const FacultyEvents = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05 }}
             >
-              <Card>
-                <CardHeader className="pb-2 flex justify-between">
+              <Card className="shadow-card">
+                <CardHeader className="pb-2 flex flex-row items-start justify-between">
                   <div className="flex items-center gap-2">
                     <span
-                      className={`h-2.5 w-2.5 rounded-full ${
-                        statusDot[event.status]
-                      }`}
+                      className={`h-2.5 w-2.5 rounded-full ${statusDot[event.status]}`}
                     />
                     <CardTitle className="text-base">
                       {event.name}
                     </CardTitle>
                   </div>
 
-                  <Badge variant={event.status as any}>
+                  <Badge
+                    variant={event.status as any}
+                    className="capitalize"
+                  >
                     {event.status}
                   </Badge>
                 </CardHeader>
 
                 <CardContent className="space-y-3">
-                  <div className="flex gap-2 text-sm text-muted-foreground">
-                    <CalendarDays className="h-4 w-4" />
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <CalendarDays className="h-3.5 w-3.5" />
                     {event.date}
                   </div>
 
-                  <div className="flex gap-2 text-sm text-muted-foreground">
-                    <Clock className="h-4 w-4" />
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Clock className="h-3.5 w-3.5" />
                     {event.time}
                   </div>
 
-                  <div className="flex gap-2 pt-2">
+                  <div className="flex gap-2 pt-1">
                     <Button
                       size="sm"
                       variant="outline"
+                      className="flex-1 gap-1"
                       onClick={() => {
                         setEditingEvent(event);
                         setFormOpen(true);
                       }}
                     >
                       <Pencil className="h-3 w-3" />
+                      Edit
                     </Button>
 
                     <Button
                       size="sm"
                       variant="outline"
+                      className="gap-1 text-destructive hover:text-destructive"
                       onClick={() => {
                         setDeletingId(event._id);
                         setDeleteOpen(true);
@@ -204,8 +211,8 @@ const FacultyEvents = () => {
             </motion.div>
           ))
         ) : (
-          <p className="col-span-full text-center py-12">
-            No events yet. Create one.
+          <p className="col-span-full text-center text-muted-foreground py-12">
+            No events yet. Create one!
           </p>
         )}
       </div>
@@ -222,7 +229,7 @@ const FacultyEvents = () => {
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         title="Delete Event"
-        description="Are you sure?"
+        description="Are you sure? This cannot be undone."
         onConfirm={handleDelete}
         isLoading={deleteEvent.isPending}
       />

@@ -1,11 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-
 import {
   Card,
   CardContent,
@@ -13,7 +11,6 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-
 import { GraduationCap, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -34,7 +31,7 @@ const Login = () => {
     setLoading(true);
 
     try {
-      // SIGNUP
+      // ================= SIGNUP =================
       if (isSignup) {
         await signup({
           name,
@@ -43,37 +40,48 @@ const Login = () => {
           studentId,
         });
 
+        // store email for OTP page
         localStorage.setItem("otpEmail", email);
 
         toast({
           title: "OTP Sent",
-          description: "Check your email",
+          description: "Check your email for OTP",
         });
 
         navigate("/verify-otp");
       }
 
-      // LOGIN
+      // ================= LOGIN =================
       else {
         await login({ email, password });
 
-        const user = JSON.parse(localStorage.getItem("user") || "{}");
+        const storedUser = JSON.parse(
+          localStorage.getItem("user") || "{}"
+        );
 
         toast({
-          title: "Login successful",
+          title: "Success",
+          description: "Login successful",
         });
 
-        if (user.role === "admin") navigate("/admin");
-        else if (user.role === "faculty") navigate("/faculty");
-        else navigate("/student/events");
+        // role-based redirect
+        if (storedUser.role === "admin") {
+          navigate("/admin");
+        } else if (storedUser.role === "faculty") {
+          navigate("/faculty");
+        } else {
+          navigate("/student");
+        }
       }
     } catch (err: any) {
+      const message =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Something went wrong";
+
       toast({
         title: "Error",
-        description:
-          err?.response?.data?.message ||
-          err?.message ||
-          "Something went wrong",
+        description: message,
         variant: "destructive",
       });
     } finally {
@@ -82,8 +90,8 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-md shadow-card">
         <CardHeader className="text-center space-y-3">
           <div className="mx-auto p-3 rounded-xl bg-gradient-primary w-fit">
             <GraduationCap className="h-8 w-8 text-primary-foreground" />
@@ -94,7 +102,9 @@ const Login = () => {
           </CardTitle>
 
           <CardDescription>
-            {isSignup ? "Create your account" : "Login to continue"}
+            {isSignup
+              ? "Create your account"
+              : "Login with your credentials"}
           </CardDescription>
         </CardHeader>
 
@@ -120,7 +130,7 @@ const Login = () => {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email"
+                placeholder="Enter your college email"
                 required
               />
             </div>
@@ -145,33 +155,32 @@ const Login = () => {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter password"
+                placeholder="Enter your password"
                 required
               />
             </div>
 
+            {/* BUTTON */}
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {loading && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
               {isSignup ? "Create Account" : "Sign In"}
             </Button>
           </form>
 
           {/* TOGGLE */}
           <p className="text-center text-sm text-muted-foreground">
-            {isSignup ? "Already have an account?" : "Don't have an account?"}{" "}
+            {isSignup
+              ? "Already have an account?"
+              : "Don't have an account?"}{" "}
             <button
               onClick={() => setIsSignup(!isSignup)}
-              className="text-primary font-medium"
+              className="text-primary font-medium hover:underline"
             >
               {isSignup ? "Sign In" : "Sign Up"}
             </button>
           </p>
-
-          {!isSignup && (
-            <p className="text-center text-xs text-muted-foreground">
-              Faculty accounts are created by admin
-            </p>
-          )}
         </CardContent>
       </Card>
     </div>

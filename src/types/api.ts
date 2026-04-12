@@ -8,8 +8,7 @@ export interface SignupCredentials {
   name: string;
   email: string;
   password: string;
-  studentId?: string;
-  role?: "student";
+  role?: "student" | "faculty";
 }
 
 export interface AuthResponse {
@@ -23,10 +22,9 @@ export interface User {
   name: string;
   email: string;
   role: "admin" | "faculty" | "student";
-  mustChangePassword?: boolean;
 }
 
-// Club
+// ✅ FIXED CLUB (ONLY ONE)
 export interface Club {
   _id: string;
   name: string;
@@ -37,46 +35,36 @@ export interface Club {
   budgetUsed?: number;
 }
 
-// Event
+// Events
 export interface Event {
   _id: string;
   name: string;
-  club?: string;
-  clubId?: string;
-  status: "approved" | "pending" | "rejected";
-  rating?: string;
+  club: string;
+  status: "approved" | "pending" | "warning";
+  rating: string;
   date: string;
   time: string;
-  description?: string;
-  maxSeats?: number;
-  budgetUsed?: number;
-  createdAt?: string;
-  updatedAt?: string;
+  budgetUsed?: number; // ✅ add
 }
 
-// Student Event
+// Student event
 export interface StudentEvent extends Event {
   registrationStatus: "registered" | "attended" | "cancelled" | null;
-  registeredCount?: number;
-  seatsRemaining?: number | null;
 }
 
 // Event Registration
 export interface EventRegistration {
   _id: string;
-  eventId: Event;
-  studentId: string | { _id: string; name: string; email: string };
+  event: Event;
+  student: string;
   status: "registered" | "attended" | "cancelled";
   createdAt: string;
-  updatedAt?: string;
 }
 
 // Feedback
 export interface Feedback {
   _id: string;
-  studentId?: { _id: string; name: string };
-  eventId?: { _id: string; name: string };
-  clubId?: { _id: string; name: string };
+  student: { _id: string; name: string };
   targetType: "club" | "event";
   targetId: string;
   rating: number;
@@ -91,8 +79,6 @@ export interface FacultyStats {
   totalRegistrations: number;
   feedbackCount: number;
   clubRating: number;
-  totalBudgetUsed?: number;
-  budgetAllocated?: number;
 }
 
 // Complaints
@@ -118,7 +104,7 @@ export interface QuickStatsData {
   totalParticipants: number;
 }
 
-// Budget
+// Budget (updated for clubs)
 export interface BudgetData {
   totalAllocated: number;
   totalUsed: number;
@@ -131,15 +117,6 @@ export interface BudgetData {
   }[];
 }
 
-// Budget Overview
-export interface BudgetOverviewItem {
-  club: { _id: string; name: string };
-  faculty: { name: string; email: string } | null;
-  budgetAllocated: number;
-  budgetUsed: number;
-  eventCount: number;
-}
-
 // Chart data
 export interface MonthlyEventData {
   month: string;
@@ -148,7 +125,7 @@ export interface MonthlyEventData {
   confirmed: number;
 }
 
-// Calendar
+// Calendar events
 export interface CalendarEvent {
   time: string;
   title: string;
@@ -171,30 +148,4 @@ export interface AppNotification {
   read: boolean;
   relatedEvent?: string;
   createdAt: string;
-}
-
-// Admin club events
-export interface ClubEventsResponse {
-  club: Club;
-  events: Event[];
-}
-
-// Live attendance
-export interface LiveAttendanceData {
-  total: number;
-  attended: number;
-  attendanceRate: number;
-  registrations: {
-    _id: string;
-    student: { _id: string; name: string; email: string };
-    status: string;
-    updatedAt: string;
-  }[];
-}
-
-// QR scan
-export interface QRScanResponse {
-  message: string;
-  event: { _id: string; name: string; club: string };
-  status: string;
 }

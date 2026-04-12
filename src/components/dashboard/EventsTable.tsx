@@ -257,5 +257,4 @@ const EventsTable = ({ facultyView }: { facultyView?: boolean }) => {
   );
 };
 
-
 export default EventsTable;

@@ -1,11 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import api from "../api/api";
-import { getSocket } from "../lib/socket";
-const socket = getSocket();
-
-socket.on("connect", () => {
-  console.log("Connected");
-});
+import api from "@/api/api";
+import { socket } from "@/lib/socket";
 
 interface User {
   _id: string;
@@ -35,7 +30,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // LOAD FROM STORAGE
+  // LOAD USER FROM LOCAL STORAGE
   useEffect(() => {
     try {
       const storedUser = localStorage.getItem("user");
@@ -48,14 +43,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       }
     } catch (err) {
-      console.error("Auth load error:", err);
+      console.error("Auth error:", err);
       localStorage.clear();
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // SOCKET CONNECT
+  // ✅ SINGLE SOURCE OF SOCKET CONNECTION
   useEffect(() => {
     if (user && user._id) {
       if (!socket.connected) {
@@ -74,18 +69,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [user]);
 
   // LOGIN
-  const login = async (credentials: { email: string; password: string }) => {
-    const res = await api.post("/auth/login", credentials);
+  const login = async (credentials: {
+  email: string;
+  password: string;
+}) => {
+  const res = await api.post("/auth/login", credentials);
 
-    if (!res?.data?.user || !res?.data?.token) {
-      throw new Error("Invalid login response");
-    }
+  console.log("LOGIN RESPONSE:", res.data); // 🔥 ADD THIS
 
-    localStorage.setItem("token", res.data.token);
-    localStorage.setItem("user", JSON.stringify(res.data.user));
+  if (!res?.data?.user || !res?.data?.token) {
+    throw new Error("Invalid response from server");
+  }
 
-    setUser(res.data.user);
-  };
+  localStorage.setItem("token", res.data.token);
+  localStorage.setItem("user", JSON.stringify(res.data.user));
+
+  setUser(res.data.user);
+};
 
   // SIGNUP
   const signup = async (data: {
@@ -94,7 +94,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     password: string;
     studentId: string;
   }) => {
-    const res = await api.post("/auth/register", data);
+    const res = await api.post("/auth/signup", data);
+    localStorage.setItem("token", res.data.token);
     return res.data;
   };
 
@@ -103,25 +104,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const res = await api.post("/auth/verify-otp", { email, otp });
 
     if (!res?.data?.user || !res?.data?.token) {
-      throw new Error("OTP failed");
+      throw new Error("OTP verification failed");
     }
 
     localStorage.setItem("token", res.data.token);
     localStorage.setItem("user", JSON.stringify(res.data.user));
 
-    setUser(res.data.user);
+    setUser(res.data.user); // ✅ socket handled by useEffect
   };
 
   // LOGOUT
   const logout = () => {
-    socket.disconnect();
+    socket.disconnect(); // ✅ correct
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, verifyOtp, logout }}>
+    <AuthContext.Provider
+      value={{ user, loading, login, signup, verifyOtp, logout }}
+    >
       {!loading && children}
     </AuthContext.Provider>
   );

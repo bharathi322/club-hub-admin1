@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import api from "../api/api";
+import api from "@/api/api";
+
 /* ================= CLUB ================= */
 
 export const useCreateClub = () => {
@@ -13,7 +14,8 @@ export const useCreateClub = () => {
 export const useUpdateClub = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: any) => api.put(`/clubs/${id}`, data),
+    mutationFn: ({ id, ...data }: any) =>
+      api.put(`/clubs/${id}`, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["clubs"] }),
   });
 };
@@ -33,7 +35,7 @@ export const useCreateEvent = () => {
   return useMutation({
     mutationFn: (data: any) => api.post("/events", data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["events"] });
+      qc.invalidateQueries({ queryKey: ["events"] }); // works as partial match
       qc.invalidateQueries({ queryKey: ["faculty-events"] });
     },
   });
@@ -42,7 +44,8 @@ export const useCreateEvent = () => {
 export const useUpdateEvent = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: any) => api.put(`/events/${id}`, data),
+    mutationFn: ({ id, ...data }: any) =>
+      api.put(`/events/${id}`, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["events"] });
       qc.invalidateQueries({ queryKey: ["faculty-events"] });
@@ -67,7 +70,7 @@ export const useRegisterEvent = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (eventId: string) =>
-      api.post(`/student/events/${eventId}/register`),
+      api.post(`/student/events/${eventId}/register`, {}),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["student-events"] });
       qc.invalidateQueries({ queryKey: ["my-registrations"] });
@@ -92,6 +95,7 @@ export const useSubmitFeedback = () => {
   return useMutation({
     mutationFn: (data: any) => api.post("/student/feedback", data),
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["clubs"] });
       qc.invalidateQueries({ queryKey: ["my-feedback"] });
     },
   });
@@ -102,7 +106,8 @@ export const useSubmitFeedback = () => {
 export const useMarkNotificationRead = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api.patch(`/notifications/${id}/read`),
+    mutationFn: (id: string) =>
+      api.patch(`/notifications/${id}/read`), // ✅ FIXED
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: ["notifications"] }),
   });
@@ -147,7 +152,8 @@ export const useCreateFaculty = () => {
 export const useDeleteFaculty = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api.delete(`/admin/faculty/${id}`),
+    mutationFn: (id: string) =>
+      api.delete(`/admin/faculty/${id}`),
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: ["faculty"] }),
   });
@@ -158,8 +164,14 @@ export const useDeleteFaculty = () => {
 export const useMarkAttendance = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id }: { id: string }) =>
-      api.patch(`/faculty/registrations/${id}/attend`),
+    mutationFn: ({
+      id,
+      status,
+    }: {
+      id: string;
+      status: string;
+    }) =>
+      api.patch(`/faculty/registrations/${id}/attend`, { status }),
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: ["faculty-registrations"] }),
   });
@@ -168,11 +180,17 @@ export const useMarkAttendance = () => {
 export const useApproveEvent = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) =>
-      api.put(`/events/${id}`, { status }),
+    mutationFn: ({
+      id,
+      status,
+    }: {
+      id: string;
+      status: string;
+    }) =>
+      api.put(`/faculty/events/${id}`, { status }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["events"] });
       qc.invalidateQueries({ queryKey: ["faculty-events"] });
+      qc.invalidateQueries({ queryKey: ["events"] });
     },
   });
 };
@@ -181,8 +199,15 @@ export const useApproveEvent = () => {
 
 export const useBulkMarkAttendance = () => {
   const qc = useQueryClient();
+
   return useMutation({
-    mutationFn: (data: any) => api.post("/faculty/attendance/bulk", data),
+    mutationFn: async (data: {
+      eventId: string;
+      attendees: { studentId: string; status: string }[];
+    }) => {
+      const res = await api.post("/faculty/attendance/bulk", data);
+      return res.data;
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["faculty-registrations"] });
       qc.invalidateQueries({ queryKey: ["faculty-events"] });

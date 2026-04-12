@@ -2,21 +2,21 @@ import { useQuery } from "@tanstack/react-query";
 import api from "@/api/api";
 import { useAuth } from "@/contexts/AuthContext";
 
-// COMMON FETCH
+// common fetch helper
 const fetchData = async (url: string) => {
   try {
     const res = await api.get(url);
 
+    // ✅ handle all formats
     if (Array.isArray(res.data)) return res.data;
     if (Array.isArray(res.data?.events)) return res.data.events;
 
-    return res.data || [];
+    return [];
   } catch (err) {
     console.error("API ERROR:", err);
     return [];
   }
 };
-
 /* ================= DASHBOARD ================= */
 
 export const useMetrics = () =>
@@ -31,16 +31,23 @@ export const useQuickStats = () =>
     queryFn: () => fetchData("/dashboard/quick-stats"),
   });
 
+export const updateClubBudget = async (id: string, budget: number) => {
+  const res = await api.patch(`/clubs/${id}/budget`, {
+    budgetAllocated: budget,
+  });
+  return res.data;
+};
+
+export const useFacultyBudget = () =>
+  useQuery({
+    queryKey: ["faculty-budget"],
+    queryFn: () => fetchData("/dashboard/faculty-budget"),
+  });
+
 export const useBudget = () =>
   useQuery({
     queryKey: ["budget"],
     queryFn: () => fetchData("/dashboard/budget"),
-  });
-
-export const useBudgetOverview = () =>
-  useQuery({
-    queryKey: ["budget-overview"],
-    queryFn: () => fetchData("/admin/budget-overview"),
   });
 
 export const useMonthlyEvents = () =>
@@ -54,6 +61,7 @@ export const useCalendarEvents = (date?: string) =>
     queryKey: ["calendar-events", date],
     queryFn: async () => {
       if (!date) return { events: [] };
+
       const res = await api.get(`/dashboard/calendar/${date}`);
       return res.data;
     },
@@ -74,8 +82,12 @@ export const useEvents = () => {
   const { user } = useAuth();
 
   return useQuery({
-    queryKey: ["events"],
-    queryFn: () => fetchData("/events"),
+    queryKey: ["events"], // ✅ remove role
+    queryFn: async () => {
+      if (!user) return [];
+
+      return fetchData("/events"); // ✅ single API
+    },
     enabled: !!user,
   });
 };
@@ -98,7 +110,7 @@ export const useFacultyStats = () =>
 
 export const useFacultyEvents = () =>
   useQuery({
-    queryKey: ["faculty-events"],
+    queryKey: ["faculty-events"], // ✅ IMPORTANT (matches socket)
     queryFn: () => fetchData("/faculty/events"),
   });
 
@@ -138,6 +150,12 @@ export const useStudentClubs = () =>
   useQuery({
     queryKey: ["student-clubs"],
     queryFn: () => fetchData("/clubs"),
+  });
+
+  export const useMediaStats = () =>
+  useQuery({
+    queryKey: ["media-stats"],
+    queryFn: () => fetchData("/dashboard/media-stats"),
   });
 
 /* ================= COMPLAINTS ================= */

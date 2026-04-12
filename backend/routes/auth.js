@@ -2,7 +2,6 @@ import express from "express";
 import User from "../models/User.js";
 import { signToken, randomNumericCode, createToken } from "../utils/auth.js";
 import { sendEmail } from "../services/emailService.js";
-import bcrypt from "bcryptjs";
 
 const router = express.Router();
 
@@ -10,89 +9,147 @@ function safeUser(user) {
   return user.toSafeObject ? user.toSafeObject() : user;
 }
 
-// LOGIN
 router.post("/login", async (req, res) => {
-  console.log("LOGIN API HIT");
-
   try {
     const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email and password are required" });
+    }
 
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const user = await User.findOne({ email: email.toLowerCase() }).populate("assignedClubs", "name");
+    if (!user) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
 
-    console.log("USER:", user?.email);
-
-    const valid = await bcrypt.compare(password, user.password);
-    console.log("PASSWORD MATCH:", valid);
-
-    if (!valid) return res.status(401).json({ message: "Invalid credentials" });
+    const valid = await user.comparePassword(password);
+    if (!valid) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
 
     return res.json({
       token: signToken(user._id),
       user: safeUser(user),
     });
-
   } catch (error) {
-    console.log("ERROR:", error);
     return res.status(500).json({ message: error.message });
   }
 });
 
-// REGISTER (student)
 router.post("/register", async (req, res) => {
   try {
     const { name, email, password, studentId, department, year } = req.body;
+    if (!name || !email || !password || !studentId) {
+      return res.status(400).json({ message: "Missing required registration fields" });
+    }
 
     const existing = await User.findOne({
       $or: [{ email: email.toLowerCase() }, { studentId }],
     });
     if (existing) {
-      return res.status(400).json({ message: "User already exists" });
+      return res.status(400).json({ message: "An account already exists for this email or student ID" });
     }
 
     const otp = randomNumericCode(6);
-
     const user = await User.create({
       name,
       email: email.toLowerCase(),
       password,
       studentId,
-      department,
-      year,
+      department: department || "",
+      year: year || "",
       role: "student",
       otp,
       otpExpiry: new Date(Date.now() + 10 * 60 * 1000),
+      onboardingSource: "student_signup",
+      isApproved: true,
       emailVerified: false,
     });
 
     await sendEmail({
       to: user.email,
-      subject: "Verify account",
-      html: `<p>Your OTP is <b>${otp}</b></p>`,
-      text: `OTP: ${otp}`,
+      subject: "Verify your Club Hub account",
+      template: "student-register-otp",
+      html: `<p>Hello ${user.name},</p><p>Your OTP is <strong>${otp}</strong>. It expires in 10 minutes.</p>`,
+      text: `Your Club Hub OTP is ${otp}.`,
+      metadata: { userId: String(user._id) },
     });
 
-    res.json({ message: "OTP sent", email: user.email });
+    res.status(201).json({
+      message: "OTP sent to email",
+      email: user.email,
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
 
-// VERIFY OTP
+router.post("/signup", async (req, res) => {
+  try {
+    const { name, email, password, studentId, department, year } = req.body;
+    if (!name || !email || !password || !studentId) {
+      return res.status(400).json({ message: "Missing required registration fields" });
+    }
+
+    const existing = await User.findOne({
+      $or: [{ email: email.toLowerCase() }, { studentId }],
+    });
+    if (existing) {
+      return res.status(400).json({ message: "An account already exists for this email or student ID" });
+    }
+
+    const otp = randomNumericCode(6);
+    const user = await User.create({
+      name,
+      email: email.toLowerCase(),
+      password,
+      studentId,
+      department: department || "",
+      year: year || "",
+      role: "student",
+      otp,
+      otpExpiry: new Date(Date.now() + 10 * 60 * 1000),
+      onboardingSource: "student_signup",
+      isApproved: true,
+      emailVerified: false,
+    });
+
+    await sendEmail({
+      to: user.email,
+      subject: "Verify your Club Hub account",
+      template: "student-register-otp",
+      html: `<p>Hello ${user.name},</p><p>Your OTP is <strong>${otp}</strong>. It expires in 10 minutes.</p>`,
+      text: `Your Club Hub OTP is ${otp}.`,
+      metadata: { userId: String(user._id) },
+    });
+
+    res.status(201).json({
+      message: "OTP sent to email",
+      email: user.email,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 router.post("/verify-otp", async (req, res) => {
   try {
     const { email, otp } = req.body;
-
-    const user = await User.findOne({ email: email.toLowerCase() });
-    if (!user || user.otp !== otp || user.otpExpiry < new Date()) {
-      return res.status(400).json({ message: "Invalid OTP" });
+    const user = await User.findOne({ email: email?.toLowerCase() });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
     }
 
-    user.emailVerified = true;
+    if (!user.otp || user.otp !== otp || !user.otpExpiry || user.otpExpiry < new Date()) {
+      return res.status(400).json({ message: "Invalid or expired OTP" });
+    }
+
     user.otp = null;
     user.otpExpiry = null;
+    user.emailVerified = true;
     await user.save();
 
     res.json({
+      message: "Email verified successfully",
       token: signToken(user._id),
       user: safeUser(user),
     });
@@ -101,32 +158,32 @@ router.post("/verify-otp", async (req, res) => {
   }
 });
 
-// CHANGE PASSWORD
 router.post("/change-password", async (req, res) => {
   try {
     const { email, currentPassword, newPassword, token } = req.body;
-
     const user = token
       ? await User.findOne({ resetToken: token, resetTokenExpiry: { $gt: new Date() } })
-      : await User.findOne({ email: email.toLowerCase() });
+      : await User.findOne({ email: email?.toLowerCase() });
 
-    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user) {
+      return res.status(404).json({ message: "User not found or token expired" });
+    }
 
     if (!token) {
-const valid = await bcrypt.compare(password, user.password);
-console.log("PASSWORD MATCH:", valid);
-      if (!valid) return res.status(401).json({ message: "Wrong password" });
+      const valid = await user.comparePassword(currentPassword || "");
+      if (!valid) {
+        return res.status(401).json({ message: "Current password is incorrect" });
+      }
     }
 
     user.password = newPassword;
+    user.mustChangePassword = false;
     user.resetToken = null;
     user.resetTokenExpiry = null;
-    user.mustChangePassword = false;
-
     await user.save();
 
     res.json({
-      message: "Password updated",
+      message: "Password changed successfully",
       token: signToken(user._id),
       user: safeUser(user),
     });
@@ -135,30 +192,34 @@ console.log("PASSWORD MATCH:", valid);
   }
 });
 
-// FORGOT PASSWORD
 router.post("/forgot-password", async (req, res) => {
   try {
     const { email } = req.body;
+    const user = await User.findOne({ email: email?.toLowerCase() });
+    if (!user) {
+      return res.json({ message: "If that account exists, a reset email has been sent." });
+    }
 
-    const user = await User.findOne({ email: email.toLowerCase() });
-    if (!user) return res.json({ message: "If exists, email sent" });
+    if (user.role === "faculty" && !user.emailVerified) {
+      return res.status(403).json({ message: "Faculty reset is blocked until email verification is complete" });
+    }
 
     const resetToken = createToken();
     user.resetToken = resetToken;
     user.resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000);
-
     await user.save();
 
-    const resetUrl = `${process.env.FRONTEND_URL}/set-password/${resetToken}`;
-
+    const resetUrl = `${process.env.FRONTEND_URL || "http://localhost:8080"}/set-password/${resetToken}`;
     await sendEmail({
       to: user.email,
-      subject: "Reset password",
-      html: `<a href="${resetUrl}">Reset</a>`,
-      text: resetUrl,
+      subject: "Reset your Club Hub password",
+      template: "forgot-password",
+      html: `<p>Hello ${user.name},</p><p>Reset your password here: <a href="${resetUrl}">${resetUrl}</a></p>`,
+      text: `Reset your password: ${resetUrl}`,
+      metadata: { userId: String(user._id), resetUrl },
     });
 
-    res.json({ message: "Reset email sent" });
+    res.json({ message: "Password reset email sent" });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

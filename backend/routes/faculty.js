@@ -6,11 +6,9 @@ import Feedback from "../models/Feedback.js";
 import Attendance from "../models/Attendance.js";
 import BudgetRequest from "../models/Budget.js";
 import ProofSubmission from "../models/ProofSubmission.js";
-
 import auth from "../middleware/auth.js";
 import permit from "../middleware/role.js";
 import checkFacultyClub from "../middleware/checkFacultyClub.js";
-
 import { sendEmail } from "../services/emailService.js";
 import { createNotification } from "../services/notificationService.js";
 import { recalculateClubHealth } from "../services/healthService.js";
@@ -18,7 +16,6 @@ import { recalculateClubHealth } from "../services/healthService.js";
 const router = express.Router();
 router.use(auth, permit("faculty"), checkFacultyClub);
 
-// GET MY CLUB
 router.get("/my-club", async (req, res) => {
   try {
     const club = await Club.findById(req.assignedClubIds[0]).populate("facultyIds", "name email");
@@ -28,99 +25,125 @@ router.get("/my-club", async (req, res) => {
   }
 });
 
-// GET EVENTS
 router.get("/events", async (req, res) => {
   try {
     const events = await Event.find({ clubId: { $in: req.assignedClubIds } })
       .populate("clubId", "name")
-      .sort({ date: -1 });
-
-    res.json(events);
+      .sort({ date: -1, time: -1 });
+    res.json(
+      events.map((event) => ({
+        ...event.toObject(),
+        clubName: event.clubId?.name || "",
+      }))
+    );
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
 
-// GET REGISTRATIONS
 router.get("/registrations", async (req, res) => {
   try {
-    const events = await Event.find({ clubId: { $in: req.assignedClubIds } });
-    const eventIds = events.map((e) => e._id);
-
+    const events = await Event.find({ clubId: { $in: req.assignedClubIds } }).select("_id name");
+    const eventIds = events.map((event) => event._id);
     const registrations = await EventRegistration.find({ eventId: { $in: eventIds } })
-      .populate("studentId", "name email")
-      .populate("eventId", "name date");
-
-    res.json(registrations);
+      .populate("studentId", "name email studentId")
+      .populate("eventId", "name date time location")
+      .sort({ createdAt: -1 });
+    res.json(
+      registrations.map((registration) => ({
+        ...registration.toObject(),
+        student: registration.studentId,
+        event: registration.eventId,
+      }))
+    );
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
 
-// MARK ATTENDANCE
 router.patch("/registrations/:id/attend", async (req, res) => {
   try {
-    const reg = await EventRegistration.findById(req.params.id).populate("eventId");
-
-    if (!reg || !req.assignedClubIds.includes(String(reg.eventId.clubId))) {
-      return res.status(404).json({ message: "Not found" });
+    const registration = await EventRegistration.findById(req.params.id).populate("eventId");
+    if (!registration || !req.assignedClubIds.includes(String(registration.eventId.clubId))) {
+      return res.status(404).json({ message: "Registration not found" });
     }
 
-    reg.status = "attended";
-    await reg.save();
+    registration.status = req.body.status === "attended" ? "attended" : "registered";
+    await registration.save();
 
-    await Attendance.findOneAndUpdate(
-      { eventId: reg.eventId._id, studentId: reg.studentId },
-      {
-        eventId: reg.eventId._id,
-        studentId: reg.studentId,
-        registrationId: reg._id,
-        checkInTime: new Date(),
-      },
-      { upsert: true }
-    );
+    if (req.body.status === "attended") {
+      await Attendance.findOneAndUpdate(
+        { eventId: registration.eventId._id, studentId: registration.studentId },
+        {
+          eventId: registration.eventId._id,
+          studentId: registration.studentId,
+          registrationId: registration._id,
+          checkInTime: new Date(),
+          status: "present",
+          markedBy: "manual",
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+    }
 
-    await recalculateClubHealth(reg.eventId.clubId);
+    const event = await Event.findById(registration.eventId._id);
+    event.attendanceCount = await Attendance.countDocuments({ eventId: event._id });
+    event.attendanceRate = event.registeredCount
+      ? Number(((event.attendanceCount / event.registeredCount) * 100).toFixed(1))
+      : 0;
+    await event.save();
+    await recalculateClubHealth(event.clubId);
 
-    res.json(reg);
+    res.json(registration);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
 
-// BULK ATTENDANCE
 router.post("/attendance/bulk", async (req, res) => {
   try {
     const ids = req.body.ids || [];
-
+    let count = 0;
     for (const id of ids) {
-      const reg = await EventRegistration.findById(id).populate("eventId");
-      if (!reg || !req.assignedClubIds.includes(String(reg.eventId.clubId))) continue;
+      const registration = await EventRegistration.findById(id).populate("eventId");
+      if (!registration || !req.assignedClubIds.includes(String(registration.eventId.clubId))) {
+        continue;
+      }
 
-      reg.status = "attended";
-      await reg.save();
+      registration.status = "attended";
+      await registration.save();
+      await Attendance.findOneAndUpdate(
+        { eventId: registration.eventId._id, studentId: registration.studentId },
+        {
+          eventId: registration.eventId._id,
+          studentId: registration.studentId,
+          registrationId: registration._id,
+          checkInTime: new Date(),
+          status: "present",
+          markedBy: "manual",
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+      count += 1;
     }
 
-    res.json({ message: "Updated" });
+    res.json({ count });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
 
-// STATS
-router.get("/stats", async (req, res) => {
+router.get("/stats", async (_req, res) => {
   try {
-    const club = await Club.findById(req.assignedClubIds[0]);
-    const events = await Event.find({ clubId: { $in: req.assignedClubIds } });
-
-    const eventIds = events.map((e) => e._id);
-
+    const club = await Club.findById(_req.assignedClubIds[0]);
+    const events = await Event.find({ clubId: { $in: _req.assignedClubIds } });
+    const eventIds = events.map((event) => event._id);
     const totalRegistrations = await EventRegistration.countDocuments({ eventId: { $in: eventIds } });
-    const feedbackCount = await Feedback.countDocuments({ clubId: { $in: req.assignedClubIds } });
+    const feedbackCount = await Feedback.countDocuments({ clubId: { $in: _req.assignedClubIds } });
 
     res.json({
       totalEvents: events.length,
-      pendingEvents: events.filter((e) => e.status === "pending").length,
+      pendingEvents: events.filter((event) => event.status === "pending").length,
       totalRegistrations,
       feedbackCount,
       clubRating: club?.rating || 0,
@@ -130,24 +153,23 @@ router.get("/stats", async (req, res) => {
   }
 });
 
-// GET FEEDBACK
-router.get("/feedback", async (req, res) => {
+router.get("/feedback", async (_req, res) => {
   try {
-    const feedback = await Feedback.find({ clubId: { $in: req.assignedClubIds } })
+    const feedback = await Feedback.find({ clubId: { $in: _req.assignedClubIds } })
       .populate("studentId", "name email")
-      .populate("eventId", "name");
-
+      .populate("eventId", "name date")
+      .sort({ createdAt: -1 });
     res.json(feedback);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
 
-// BUDGET REQUEST
 router.post("/budget-request", async (req, res) => {
   try {
     const request = await BudgetRequest.create({
-      clubId: req.assignedClubIds[0],
+      clubId: req.body.clubId || req.assignedClubIds[0],
+      eventId: req.body.eventId || null,
       facultyId: req.user._id,
       amount: req.body.amount,
       purpose: req.body.purpose,
@@ -155,42 +177,47 @@ router.post("/budget-request", async (req, res) => {
 
     await createNotification({
       userId: req.user._id,
-      title: "Budget requested",
-      message: `INR ${request.amount}`,
+      title: "Budget request submitted",
+      message: `INR ${request.amount} requested`,
+      type: "success",
+      metadata: { requestId: String(request._id) },
     });
 
-    res.json(request);
+    res.status(201).json(request);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
 
-// GET PROOFS
-router.get("/proofs", async (req, res) => {
+router.get("/proofs", async (_req, res) => {
   try {
-    const proofs = await ProofSubmission.find({ clubId: { $in: req.assignedClubIds } })
-      .populate("eventId", "name");
-
+    const proofs = await ProofSubmission.find({ clubId: { $in: _req.assignedClubIds } })
+      .populate("eventId", "name date proofStatus")
+      .sort({ updatedAt: -1 });
     res.json(proofs);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
 
-// RESPOND TO FEEDBACK
 router.post("/feedback/respond", async (req, res) => {
   try {
-    const feedback = await Feedback.findById(req.body.feedbackId).populate("studentId", "email");
-
-    if (!feedback) return res.status(404).json({ message: "Not found" });
+    const feedback = await Feedback.findById(req.body.feedbackId).populate("studentId", "email name");
+    if (!feedback || !req.assignedClubIds.includes(String(feedback.clubId))) {
+      return res.status(404).json({ message: "Feedback not found" });
+    }
 
     feedback.facultyResponse = req.body.response;
+    feedback.facultyRespondedAt = new Date();
     await feedback.save();
 
     await sendEmail({
       to: feedback.studentId.email,
-      subject: "Response to your feedback",
+      subject: "Faculty responded to your feedback",
+      template: "feedback-response",
+      html: `<p>${req.body.response}</p>`,
       text: req.body.response,
+      metadata: { feedbackId: String(feedback._id), studentId: String(feedback.studentId._id) },
     });
 
     res.json(feedback);

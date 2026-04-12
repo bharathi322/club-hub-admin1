@@ -2,10 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { CalendarDays, Clock, Star, MessageSquare, ClipboardList } from "lucide-react";
-
 import { useAuth } from "@/contexts/AuthContext";
 import { useMyRegistrations, useMyFeedback } from "@/hooks/use-dashboard-api";
-
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { motion } from "framer-motion";
@@ -29,8 +27,8 @@ const renderStars = (rating: number) => (
 const StudentProfile = () => {
   const { user } = useAuth();
 
-  const { data: registrations = [], isLoading: regsLoading } = useMyRegistrations();
-  const { data: feedbackHistory = [], isLoading: fbLoading } = useMyFeedback();
+  const { data: registrations, isLoading: regsLoading } = useMyRegistrations();
+  const { data: feedbackHistory, isLoading: fbLoading } = useMyFeedback();
 
   const initials = (user?.name ?? "U")
     .split(" ")
@@ -41,12 +39,13 @@ const StudentProfile = () => {
 
   return (
     <div className="p-6 space-y-6">
+      {/* Profile Header */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <Card>
+        <Card className="shadow-card">
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
               <Avatar className="h-16 w-16">
-                <AvatarFallback className="text-xl font-bold">
+                <AvatarFallback className="text-xl bg-gradient-primary text-primary-foreground font-bold">
                   {initials}
                 </AvatarFallback>
               </Avatar>
@@ -58,12 +57,12 @@ const StudentProfile = () => {
                 <div className="flex gap-3 pt-1">
                   <Badge variant="secondary" className="gap-1">
                     <ClipboardList className="h-3 w-3" />
-                    {registrations.length} Registrations
+                    {registrations?.length ?? 0} Registrations
                   </Badge>
 
                   <Badge variant="secondary" className="gap-1">
                     <MessageSquare className="h-3 w-3" />
-                    {feedbackHistory.length} Reviews
+                    {feedbackHistory?.length ?? 0} Reviews
                   </Badge>
                 </div>
               </div>
@@ -72,6 +71,7 @@ const StudentProfile = () => {
         </Card>
       </motion.div>
 
+      {/* Tabs */}
       <Tabs defaultValue="registrations">
         <TabsList className="grid w-full grid-cols-2 max-w-md">
           <TabsTrigger value="registrations">
@@ -89,7 +89,7 @@ const StudentProfile = () => {
               Array.from({ length: 3 }).map((_, i) => (
                 <Skeleton key={i} className="h-36 rounded-lg" />
               ))
-            ) : registrations.length ? (
+            ) : registrations?.length ? (
               registrations.map((reg, i) => (
                 <motion.div
                   key={reg._id}
@@ -97,11 +97,9 @@ const StudentProfile = () => {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.05 }}
                 >
-                  <Card>
+                  <Card className="shadow-card">
                     <CardHeader className="pb-2 flex justify-between">
-                      <CardTitle className="text-sm">
-                        {reg.eventId?.name || "Event"}
-                      </CardTitle>
+                      <CardTitle className="text-sm">{reg.event.name}</CardTitle>
 
                       <Badge variant="secondary" className="capitalize text-xs">
                         {reg.status}
@@ -109,16 +107,13 @@ const StudentProfile = () => {
                     </CardHeader>
 
                     <CardContent className="space-y-1 text-xs text-muted-foreground">
+                      <p>{reg.event.club}</p>
                       <div className="flex gap-2">
-                        <CalendarDays className="h-3 w-3" />
-                        {reg.eventId?.date}
+                        <CalendarDays className="h-3 w-3" /> {reg.event.date}
                       </div>
-
                       <div className="flex gap-2">
-                        <Clock className="h-3 w-3" />
-                        {reg.eventId?.time}
+                        <Clock className="h-3 w-3" /> {reg.event.time}
                       </div>
-
                       <p>
                         Registered{" "}
                         {format(new Date(reg.createdAt), "MMM d, yyyy")}
@@ -128,7 +123,7 @@ const StudentProfile = () => {
                 </motion.div>
               ))
             ) : (
-              <p className="text-center py-12 text-muted-foreground">
+              <p className="text-center text-muted-foreground py-12">
                 No registrations yet
               </p>
             )}
@@ -141,7 +136,7 @@ const StudentProfile = () => {
             Array.from({ length: 3 }).map((_, i) => (
               <Skeleton key={i} className="h-20 rounded-lg" />
             ))
-          ) : feedbackHistory.length ? (
+          ) : feedbackHistory?.length ? (
             feedbackHistory.map((fb, i) => (
               <motion.div
                 key={fb._id}
@@ -154,7 +149,7 @@ const StudentProfile = () => {
                     <div className="flex justify-between">
                       <div>
                         <p className="text-sm font-medium">
-                          {fb.eventId?.name || fb.clubId?.name || "Feedback"}
+                          {fb.targetName}
                         </p>
                         <p className="text-sm text-muted-foreground">
                           {fb.comment}
@@ -173,7 +168,7 @@ const StudentProfile = () => {
               </motion.div>
             ))
           ) : (
-            <p className="text-center py-12 text-muted-foreground">
+            <p className="text-center text-muted-foreground py-12">
               No feedback yet
             </p>
           )}

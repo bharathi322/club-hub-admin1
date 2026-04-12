@@ -7,10 +7,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import api from "../api/api";
+import api from "@/lib/api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-
 import {
   Table,
   TableBody,
@@ -19,10 +18,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-
 import {
   Dialog,
   DialogContent,
@@ -30,7 +27,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-
 import { Loader2, Plus } from "lucide-react";
 import { useState } from "react";
 
@@ -53,14 +49,15 @@ const FacultyAssignment = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
+  const [newPassword, setNewPassword] = useState("");
   const [newClubId, setNewClubId] = useState("none");
 
-  const { data: faculty = [], isLoading: facultyLoading } = useQuery({
+  const { data: faculty, isLoading: facultyLoading } = useQuery<FacultyUser[]>({
     queryKey: ["faculty"],
     queryFn: async () => (await api.get("/admin/faculty")).data,
   });
 
-  const { data: clubs = [], isLoading: clubsLoading } = useQuery({
+  const { data: clubs, isLoading: clubsLoading } = useQuery<Club[]>({
     queryKey: ["clubs"],
     queryFn: async () => (await api.get("/clubs")).data,
   });
@@ -68,6 +65,7 @@ const FacultyAssignment = () => {
   const assignMutation = useMutation({
     mutationFn: ({ facultyId, clubId }: any) =>
       api.put(`/admin/faculty/${facultyId}/assign`, { clubId }),
+
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["faculty"] });
       toast({ title: "Assigned successfully" });
@@ -76,12 +74,14 @@ const FacultyAssignment = () => {
 
   const createMutation = useMutation({
     mutationFn: (data: any) => api.post("/admin/faculty", data),
+
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["faculty"] });
       toast({ title: "Faculty created" });
       setDialogOpen(false);
       resetForm();
     },
+
     onError: (err: any) =>
       toast({
         title: "Error",
@@ -93,9 +93,11 @@ const FacultyAssignment = () => {
   const resetForm = () => {
     setNewName("");
     setNewEmail("");
+    setNewPassword("");
     setNewClubId("none");
   };
 
+  // ✅ FULL VALIDATION
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -109,8 +111,10 @@ const FacultyAssignment = () => {
       return;
     }
 
-    const exists = faculty.some(
-      (f: any) => f.email.toLowerCase() === newEmail.toLowerCase()
+    
+
+    const exists = faculty?.some(
+      (f) => f.email.toLowerCase() === newEmail.toLowerCase()
     );
 
     if (exists) {
@@ -119,10 +123,10 @@ const FacultyAssignment = () => {
     }
 
     createMutation.mutate({
-      name: newName,
-      email: newEmail,
-      clubId: newClubId === "none" ? undefined : newClubId,
-    });
+  name: newName,
+  email: newEmail,
+  clubId: newClubId === "none" ? undefined : newClubId,
+});
   };
 
   const isLoading = facultyLoading || clubsLoading;
@@ -157,13 +161,14 @@ const FacultyAssignment = () => {
               </TableHeader>
 
               <TableBody>
-                {faculty.map((f: any) => (
+                {faculty?.map((f) => (
                   <TableRow key={f._id}>
                     <TableCell>{f.name}</TableCell>
                     <TableCell>{f.email}</TableCell>
 
                     <TableCell>
                       <Select
+                        disabled={assignMutation.isPending}
                         value={f.assignedClub?._id || "none"}
                         onValueChange={(val) =>
                           assignMutation.mutate({
@@ -179,9 +184,9 @@ const FacultyAssignment = () => {
                         <SelectContent>
                           <SelectItem value="none">Unassigned</SelectItem>
 
-                          {clubs.map((club: any) => {
+                          {clubs?.map((club) => {
                             const isAssigned = faculty.some(
-                              (fac: any) =>
+                              (fac) =>
                                 fac.assignedClub?._id === club._id &&
                                 fac._id !== f._id
                             );
@@ -225,7 +230,7 @@ const FacultyAssignment = () => {
 
               <SelectContent>
                 <SelectItem value="none">None</SelectItem>
-                {clubs.map((club: any) => (
+                {clubs?.map((club) => (
                   <SelectItem key={club._id} value={club._id}>
                     {club.name}
                   </SelectItem>

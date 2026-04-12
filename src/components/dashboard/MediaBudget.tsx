@@ -1,25 +1,32 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Image, FileText, IndianRupee } from "lucide-react";
-import { useBudgetOverview } from "@/hooks/use-dashboard-api";
+import { useBudget } from "@/hooks/use-dashboard-api";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useNavigate } from "react-router-dom";
 
 const MediaBudget = () => {
-  const { data: overview, isLoading } = useBudgetOverview();
+  const { data, isLoading } = useBudget();
+  const navigate = useNavigate(); // ✅ FIXED
 
-  const totalAllocated = overview?.reduce((s, o) => s + o.budgetAllocated, 0) ?? 0;
-  const totalUsed = overview?.reduce((s, o) => s + o.budgetUsed, 0) ?? 0;
-  const totalEvents = overview?.reduce((s, o) => s + o.eventCount, 0) ?? 0;
-
+  // ✅ Safe calculations
   const budgetPercent =
-    totalAllocated > 0 ? Math.round((totalUsed / totalAllocated) * 100) : 0;
+    data && data.budgetTotal
+      ? Math.round((data.budgetUsed / data.budgetTotal) * 100)
+      : 0;
 
-  const remaining = totalAllocated - totalUsed;
+  const remaining =
+    data &&
+    typeof data.budgetTotal === "number" &&
+    typeof data.budgetUsed === "number"
+      ? data.budgetTotal - data.budgetUsed
+      : 0;
 
   return (
     <div className="space-y-4">
       
-      {/* MEDIA */}
+      {/* MEDIA SECTION */}
       <Card className="shadow-card">
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-semibold">
@@ -29,42 +36,52 @@ const MediaBudget = () => {
 
         <CardContent className="space-y-3">
           
-          {/* Total Events */}
+          {/* Photos */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-muted-foreground">
               <Image className="h-4 w-4" />
-              <span className="text-sm">Total Events</span>
+              <span className="text-sm">Photos Uploaded</span>
             </div>
 
             {isLoading ? (
               <Skeleton className="h-5 w-10" />
             ) : (
               <span className="text-sm font-bold text-card-foreground">
-                {totalEvents}
+                {data?.photosUploaded ?? "--"}
               </span>
             )}
           </div>
 
-          {/* Active Clubs */}
+          {/* Reports */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-muted-foreground">
               <FileText className="h-4 w-4" />
-              <span className="text-sm">Active Clubs</span>
+              <span className="text-sm">Reports Pending</span>
             </div>
 
             {isLoading ? (
               <Skeleton className="h-5 w-10" />
             ) : (
               <span className="text-sm font-bold text-card-foreground">
-                {overview?.length ?? 0}
+                {data?.reportsPending ?? "--"}
               </span>
             )}
           </div>
+
+          {/* ✅ FIXED BUTTON */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full mt-2 gap-2"
+            onClick={() => navigate("/admin/media")} // ✅ FIXED PATH
+          >
+            View All Media & Documents
+          </Button>
 
         </CardContent>
       </Card>
 
-      {/* BUDGET */}
+      {/* BUDGET SECTION */}
       <Card className="shadow-card">
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -78,15 +95,20 @@ const MediaBudget = () => {
             <Skeleton className="h-20 w-full rounded-lg" />
           ) : (
             <>
+              {/* Progress Bar */}
               <Progress value={budgetPercent} className="h-2.5" />
 
+              {/* Values */}
               <div className="flex justify-between text-sm">
                 
                 {/* Used */}
                 <div>
                   <p className="text-muted-foreground">Budget Used</p>
                   <p className="font-bold text-card-foreground">
-                    ₹{totalUsed.toLocaleString("en-IN")}
+                    ₹
+                    {typeof data?.budgetUsed === "number"
+                      ? data.budgetUsed.toLocaleString("en-IN")
+                      : "--"}
                   </p>
                 </div>
 
@@ -94,32 +116,13 @@ const MediaBudget = () => {
                 <div className="text-right">
                   <p className="text-muted-foreground">Remaining</p>
                   <p className="font-bold text-status-healthy">
-                    ₹{remaining.toLocaleString("en-IN")}
+                    ₹
+                    {remaining
+                      ? remaining.toLocaleString("en-IN")
+                      : "--"}
                   </p>
                 </div>
 
-              </div>
-
-              {/* Breakdown */}
-              <div className="space-y-2 pt-2 border-t">
-                {overview?.map((item) => (
-                  <div
-                    key={item.club._id}
-                    className="flex items-center justify-between text-xs"
-                  >
-                    <div>
-                      <span className="font-medium text-card-foreground">
-                        {item.faculty?.name || "Unassigned"}
-                      </span>
-                      <span className="text-muted-foreground ml-1">
-                        ({item.club.name})
-                      </span>
-                    </div>
-                    <span className="text-muted-foreground">
-                      ₹{item.budgetUsed.toLocaleString("en-IN")} ({item.eventCount} events)
-                    </span>
-                  </div>
-                ))}
               </div>
             </>
           )}

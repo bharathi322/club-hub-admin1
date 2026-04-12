@@ -4,22 +4,6 @@ import auth from "../middleware/auth.js";
 import { getIo } from "../socket.js";
 
 const router = express.Router();
-export async function checkEventRisk(event) {
-  try {
-    let risk = "low";
-
-    if (event.budgetSpent > event.budgetApproved) {
-      risk = "high";
-    } else if (event.attendanceRate < 50) {
-      risk = "medium";
-    }
-
-    return risk;
-  } catch (err) {
-    console.error("checkEventRisk error:", err);
-    return "low";
-  }
-}
 
 router.get("/", auth, async (req, res) => {
   try {

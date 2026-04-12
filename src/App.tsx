@@ -9,25 +9,23 @@ import {
   Navigate,
   useLocation,
 } from "react-router-dom";
-
+import MediaDocuments from "@/pages/MediaDocuments";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import DashboardLayout from "@/components/DashboardLayout";
-
+import Settings from "./pages/Settings";
+// Pages
+import VerifyOtp from "./pages/VerifyOtp";
 import Login from "./pages/Login";
-import VerifyOtp from "./pages/VerifyOtp.tsx";
-import SetPassword from "./pages/SetPassword.tsx";
 import NotFound from "./pages/NotFound";
+import SetPassword from "./pages/SetPassword";
 
 // Admin
 import Index from "./pages/Index";
 import Clubs from "./pages/Clubs";
 import Events from "./pages/Events";
 import Reports from "./pages/Reports";
-import Settings from "./pages/Settings";
-import FacultyAssignment from "./pages/FacultyAssignment";
-import MediaDocuments from "./pages/MediaDocuments";
 
 // Student
 import StudentEvents from "./pages/student/StudentEvents";
@@ -36,6 +34,8 @@ import StudentMyRegistrations from "./pages/student/StudentMyRegistrations";
 import StudentProfile from "./pages/student/StudentProfile";
 import StudentNotifications from "./pages/student/StudentNotifications";
 
+
+
 // Faculty
 import FacultyDashboard from "./pages/faculty/FacultyDashboard";
 import FacultyEvents from "./pages/faculty/FacultyEvents";
@@ -43,10 +43,10 @@ import FacultyMembers from "./pages/faculty/FacultyMembers";
 import FacultyFeedback from "./pages/faculty/FacultyFeedback";
 import FacultyAttendance from "./pages/faculty/FacultyAttendance";
 import FacultyAnalytics from "./pages/faculty/FacultyAnalytics";
-
+import FacultyAssignment from "@/pages/FacultyAssignment";
 const queryClient = new QueryClient();
 
-/* ROLE ROUTE */
+/* ================= ROLE ROUTE ================= */
 const RoleRoute = ({
   children,
   allowedRoles,
@@ -57,18 +57,19 @@ const RoleRoute = ({
   const { user, loading } = useAuth();
 
   if (loading) return null;
+
   if (!user) return <Navigate to="/login" replace />;
 
   if (!allowedRoles.includes(user.role)) {
     if (user.role === "admin") return <Navigate to="/admin" replace />;
     if (user.role === "faculty") return <Navigate to="/faculty" replace />;
-    if (user.role === "student") return <Navigate to="/student/events" replace />;
+    if (user.role === "student") return <Navigate to="/student" replace />;
   }
 
   return <>{children}</>;
 };
 
-/* LOGIN ROUTE */
+/* ================= LOGIN ROUTE ================= */
 const LoginRoute = () => {
   const { user, loading } = useAuth();
   const location = useLocation();
@@ -80,7 +81,7 @@ const LoginRoute = () => {
 
     if (user.role === "admin") target = "/admin";
     else if (user.role === "faculty") target = "/faculty";
-    else target = "/student/events";
+    else if (user.role === "student") target = "/student";
 
     if (location.pathname !== target) {
       return <Navigate to={target} replace />;
@@ -90,7 +91,7 @@ const LoginRoute = () => {
   return <Login />;
 };
 
-/* APP */
+/* ================= APP ================= */
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
@@ -98,18 +99,40 @@ const App = () => (
         <TooltipProvider>
           <Toaster />
           <Sonner />
-
           <BrowserRouter>
             <Routes>
+<Route
+  path="/admin/settings"
+  element={
+    <ProtectedRoute>
+      <RoleRoute allowedRoles={["admin"]}>
+        <DashboardLayout>
+          <Settings />
+        </DashboardLayout>
+      </RoleRoute>
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/faculty"
+  element={
+    <ProtectedRoute>
+      <DashboardLayout>
+        <FacultyDashboard />
+      </DashboardLayout>
+    </ProtectedRoute>
+  }
+/>
+<Route path="/faculty" element={<FacultyDashboard />} />
               {/* AUTH */}
               <Route path="/login" element={<LoginRoute />} />
               <Route path="/verify-otp" element={<VerifyOtp />} />
               <Route path="/set-password/:token" element={<SetPassword />} />
 
-              {/* ROOT */}
+              {/* ROOT REDIRECT */}
               <Route path="/" element={<Navigate to="/login" />} />
 
-              {/* ADMIN */}
+              {/* ================= ADMIN ================= */}
               <Route
                 path="/admin"
                 element={
@@ -122,6 +145,8 @@ const App = () => (
                   </ProtectedRoute>
                 }
               />
+
+<Route path="/admin/media" element={<MediaDocuments />} />
 
               <Route
                 path="/admin/clubs"
@@ -162,58 +187,23 @@ const App = () => (
                 }
               />
 
-              <Route
-                path="/admin/settings"
-                element={
-                  <ProtectedRoute>
-                    <RoleRoute allowedRoles={["admin"]}>
-                      <DashboardLayout>
-                        <Settings />
-                      </DashboardLayout>
-                    </RoleRoute>
-                  </ProtectedRoute>
-                }
-              />
+              {/* ================= FACULTY ================= */}
+             
+             
+             <Route
+  path="/admin/faculty-assignment"
+  element={
+    <ProtectedRoute>
+      <RoleRoute allowedRoles={["admin"]}>
+        <DashboardLayout>
+          <FacultyAssignment />
+        </DashboardLayout>
+      </RoleRoute>
+    </ProtectedRoute>
+  }
+/>
 
-              <Route
-                path="/admin/faculty-assignment"
-                element={
-                  <ProtectedRoute>
-                    <RoleRoute allowedRoles={["admin"]}>
-                      <DashboardLayout>
-                        <FacultyAssignment />
-                      </DashboardLayout>
-                    </RoleRoute>
-                  </ProtectedRoute>
-                }
-              />
 
-              <Route
-                path="/admin/media"
-                element={
-                  <ProtectedRoute>
-                    <RoleRoute allowedRoles={["admin"]}>
-                      <DashboardLayout>
-                        <MediaDocuments />
-                      </DashboardLayout>
-                    </RoleRoute>
-                  </ProtectedRoute>
-                }
-              />
-
-              {/* FACULTY */}
-              <Route
-                path="/faculty"
-                element={
-                  <ProtectedRoute>
-                    <RoleRoute allowedRoles={["faculty"]}>
-                      <DashboardLayout>
-                        <FacultyDashboard />
-                      </DashboardLayout>
-                    </RoleRoute>
-                  </ProtectedRoute>
-                }
-              />
 
               <Route
                 path="/faculty/events"
@@ -280,7 +270,20 @@ const App = () => (
                 }
               />
 
-              {/* STUDENT */}
+              {/* ================= STUDENT ================= */}
+              <Route
+                path="/student"
+                element={
+                  <ProtectedRoute>
+                    <RoleRoute allowedRoles={["student"]}>
+                      <DashboardLayout>
+                        <StudentEvents />
+                      </DashboardLayout>
+                    </RoleRoute>
+                  </ProtectedRoute>
+                }
+              />
+
               <Route
                 path="/student/events"
                 element={
@@ -348,6 +351,7 @@ const App = () => (
 
               {/* 404 */}
               <Route path="*" element={<NotFound />} />
+
             </Routes>
           </BrowserRouter>
         </TooltipProvider>
