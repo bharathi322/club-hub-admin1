@@ -9,6 +9,32 @@ function safeUser(user) {
   return user.toSafeObject ? user.toSafeObject() : user;
 }
 
+router.post("/set-password", async (req, res) => {
+  try {
+    const { token, password } = req.body;
+
+    const user = await User.findOne({
+      resetToken: token,
+      resetTokenExpiry: { $gt: new Date() },
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: "Invalid or expired token" });
+    }
+
+    user.password = password;
+    user.resetToken = undefined;
+    user.resetTokenExpiry = undefined;
+    user.mustChangePassword = false;
+
+    await user.save();
+
+    res.json({ message: "Password updated" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;

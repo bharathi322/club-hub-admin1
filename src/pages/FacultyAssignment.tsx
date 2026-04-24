@@ -34,7 +34,7 @@ interface FacultyUser {
   _id: string;
   name: string;
   email: string;
-  assignedClub: { _id: string; name: string } | null;
+  assignedClubs: { _id: string; name: string }[];
 }
 
 interface Club {
@@ -49,7 +49,6 @@ const FacultyAssignment = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
-  const [newPassword, setNewPassword] = useState("");
   const [newClubId, setNewClubId] = useState("none");
 
   const { data: faculty, isLoading: facultyLoading } = useQuery<FacultyUser[]>({
@@ -68,12 +67,22 @@ const FacultyAssignment = () => {
 
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["faculty"] });
+      qc.refetchQueries({ queryKey: ["faculty"] }); // important
       toast({ title: "Assigned successfully" });
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/admin/faculty/${id}`),
+
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["faculty"] });
+      toast({ title: "Faculty deleted" });
+    },
+  });
+
   const createMutation = useMutation({
-    mutationFn: (data: any) => api.post("/admin/faculty", data),
+    mutationFn: (data: any) => api.post("/admin/assign-faculty", data),
 
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["faculty"] });
@@ -93,11 +102,9 @@ const FacultyAssignment = () => {
   const resetForm = () => {
     setNewName("");
     setNewEmail("");
-    setNewPassword("");
     setNewClubId("none");
   };
 
-  // ✅ FULL VALIDATION
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -111,8 +118,6 @@ const FacultyAssignment = () => {
       return;
     }
 
-    
-
     const exists = faculty?.some(
       (f) => f.email.toLowerCase() === newEmail.toLowerCase()
     );
@@ -123,10 +128,10 @@ const FacultyAssignment = () => {
     }
 
     createMutation.mutate({
-  name: newName,
-  email: newEmail,
-  clubId: newClubId === "none" ? undefined : newClubId,
-});
+      name: newName,
+      email: newEmail,
+      clubId: newClubId === "none" ? undefined : newClubId,
+    });
   };
 
   const isLoading = facultyLoading || clubsLoading;
@@ -157,6 +162,7 @@ const FacultyAssignment = () => {
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Assigned Club</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
 
@@ -169,13 +175,19 @@ const FacultyAssignment = () => {
                     <TableCell>
                       <Select
                         disabled={assignMutation.isPending}
-                        value={f.assignedClub?._id || "none"}
-                        onValueChange={(val) =>
+                        value={
+                          f.assignedClubs && f.assignedClubs.length > 0
+                            ? f.assignedClubs[0]._id
+                            : "none"
+                        }
+                        onValueChange={(val) => {
+                          console.log("Selected:", val);
+
                           assignMutation.mutate({
                             facultyId: f._id,
-                            clubId: val === "none" ? null : val,
-                          })
-                        }
+                            clubId: val === "none" ? undefined : val,
+                          });
+                        }}
                       >
                         <SelectTrigger className="w-[200px]">
                           <SelectValue />
@@ -185,10 +197,12 @@ const FacultyAssignment = () => {
                           <SelectItem value="none">Unassigned</SelectItem>
 
                           {clubs?.map((club) => {
-                            const isAssigned = faculty.some(
+                            const isAssigned = faculty?.some(
                               (fac) =>
-                                fac.assignedClub?._id === club._id &&
-                                fac._id !== f._id
+                                fac._id !== f._id &&
+                                fac.assignedClubs?.some(
+                                  (c) => c._id === club._id
+                                )
                             );
 
                             return (
@@ -204,6 +218,20 @@ const FacultyAssignment = () => {
                         </SelectContent>
                       </Select>
                     </TableCell>
+
+                    <TableCell>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => {
+                          if (!confirm("Delete faculty?")) return;
+                          deleteMutation.mutate(f._id);
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    </TableCell>
+
                   </TableRow>
                 ))}
               </TableBody>
@@ -212,7 +240,6 @@ const FacultyAssignment = () => {
         </CardContent>
       </Card>
 
-      {/* CREATE DIALOG */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>

@@ -18,8 +18,13 @@ import proofRoutes from "./routes/proofs.js";
 import feedbackRoutes from "./routes/feedback.js";
 import { initSocket, registerSocketUser, unregisterSocket } from "./socket.js";
 
-dotenv.config();
+import path from "path";
 
+dotenv.config({
+  path: path.resolve(process.cwd(), ".env"),
+});
+console.log("EMAIL FROM SERVER:", process.env.EMAIL);
+console.log("PASS FROM SERVER:", process.env.EMAIL_PASSWORD);
 const app = express();
 const server = http.createServer(app);
 

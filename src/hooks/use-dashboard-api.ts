@@ -2,21 +2,21 @@ import { useQuery } from "@tanstack/react-query";
 import api from "@/api/api";
 import { useAuth } from "@/contexts/AuthContext";
 
-// common fetch helper
+// COMMON FETCH
 const fetchData = async (url: string) => {
   try {
     const res = await api.get(url);
 
-    // ✅ handle all formats
     if (Array.isArray(res.data)) return res.data;
     if (Array.isArray(res.data?.events)) return res.data.events;
 
-    return [];
+    return res.data || [];
   } catch (err) {
     console.error("API ERROR:", err);
     return [];
   }
 };
+
 /* ================= DASHBOARD ================= */
 
 export const useMetrics = () =>
@@ -30,13 +30,6 @@ export const useQuickStats = () =>
     queryKey: ["quick-stats"],
     queryFn: () => fetchData("/dashboard/quick-stats"),
   });
-
-export const updateClubBudget = async (id: string, budget: number) => {
-  const res = await api.patch(`/clubs/${id}/budget`, {
-    budgetAllocated: budget,
-  });
-  return res.data;
-};
 
 export const useFacultyBudget = () =>
   useQuery({
@@ -61,7 +54,6 @@ export const useCalendarEvents = (date?: string) =>
     queryKey: ["calendar-events", date],
     queryFn: async () => {
       if (!date) return { events: [] };
-
       const res = await api.get(`/dashboard/calendar/${date}`);
       return res.data;
     },
@@ -82,11 +74,10 @@ export const useEvents = () => {
   const { user } = useAuth();
 
   return useQuery({
-    queryKey: ["events"], // ✅ remove role
+    queryKey: ["events"],
     queryFn: async () => {
       if (!user) return [];
-
-      return fetchData("/events"); // ✅ single API
+      return fetchData("/events");
     },
     enabled: !!user,
   });
@@ -110,7 +101,7 @@ export const useFacultyStats = () =>
 
 export const useFacultyEvents = () =>
   useQuery({
-    queryKey: ["faculty-events"], // ✅ IMPORTANT (matches socket)
+    queryKey: ["faculty-events"],
     queryFn: () => fetchData("/faculty/events"),
   });
 
@@ -143,7 +134,7 @@ export const useMyRegistrations = () =>
 export const useMyFeedback = () =>
   useQuery({
     queryKey: ["my-feedback"],
-    queryFn: () => fetchData("/student/my-feedback"),
+    queryFn: () => fetchData("/feedback"),
   });
 
 export const useStudentClubs = () =>
@@ -152,7 +143,7 @@ export const useStudentClubs = () =>
     queryFn: () => fetchData("/clubs"),
   });
 
-  export const useMediaStats = () =>
+export const useMediaStats = () =>
   useQuery({
     queryKey: ["media-stats"],
     queryFn: () => fetchData("/dashboard/media-stats"),

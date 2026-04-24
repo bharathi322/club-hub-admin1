@@ -6,7 +6,6 @@ import Feedback from "../models/Feedback.js";
 import Attendance from "../models/Attendance.js";
 import auth from "../middleware/auth.js";
 import permit from "../middleware/role.js";
-import { createConfirmationCode } from "../utils/auth.js";
 import { sendEmail } from "../services/emailService.js";
 import { createNotification } from "../services/notificationService.js";
 

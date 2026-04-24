@@ -12,21 +12,23 @@ import { sendEmail } from "../services/emailService.js";
 import { getIo } from "../socket.js";
 import { fileToMeta } from "../utils/files.js";
 import { createToken } from "../utils/auth.js";
-import { checkEventRisk } from "../services/notificationService.js";
 
 const router = express.Router();
 
+// ACCESS CHECK
 async function ensureEventAccess(user, event) {
   if (user.role === "admin") return true;
+
   if (user.role === "faculty") {
     return (user.assignedClubs || []).some(
       (clubId) => String(clubId) === String(event.clubId)
     );
   }
+
   return false;
 }
 
-// GET ALL EVENTS
+// GET EVENTS
 router.get("/", auth, async (req, res) => {
   try {
     const query = {};
@@ -41,8 +43,9 @@ router.get("/", auth, async (req, res) => {
 
     if (req.query.status) query.status = req.query.status;
     if (req.query.clubId) query.clubId = req.query.clubId;
-    if (req.query.search)
+    if (req.query.search) {
       query.name = { $regex: req.query.search, $options: "i" };
+    }
 
     const events = await Event.find(query)
       .populate("clubId", "name healthStatus")
@@ -103,12 +106,7 @@ router.post(
         ),
       });
 
-      // ✅ RISK CHECK (FIXED)
-      const isRisky = checkEventRisk(event);
-      if (isRisky) {
-        console.log("High risk event detected");
-      }
-
+      // QR CODE
       event.qrCodeDataUrl = await generateQrCodeDataUrl(
         JSON.stringify({
           eventId: String(event._id),
@@ -148,9 +146,7 @@ router.put("/:id", auth, permit("admin", "faculty"), async (req, res) => {
         status: { $ne: "cancelled" },
       }).populate("studentId", "email name");
 
-      const studentIds = registrations.map(
-        (r) => r.studentId._id
-      );
+      const studentIds = registrations.map((r) => r.studentId._id);
 
       await notifyMany(studentIds, {
         title: "Event status updated",
@@ -162,7 +158,7 @@ router.put("/:id", auth, permit("admin", "faculty"), async (req, res) => {
 
     getIo().to(`club:${event.clubId}`).emit("event:updated", event);
 
-    res.json(event)``;
+    res.json(event);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

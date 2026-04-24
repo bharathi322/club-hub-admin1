@@ -6,11 +6,11 @@ interface Props {
   role?: string;
 }
 
-const ProtectedRoute = ({ children, role }: Props) => {
+export default function ProtectedRoute({ children, role }: Props) {
   const { user, loading } = useAuth();
   const location = useLocation();
 
-  // wait for auth to load
+  // loading state
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -21,27 +21,23 @@ const ProtectedRoute = ({ children, role }: Props) => {
 
   // not logged in
   if (!user) {
-    // prevent redirect loop
     if (location.pathname !== "/login") {
       return <Navigate to="/login" replace />;
     }
     return null;
   }
 
-  // role check
+  // role-based redirect
   if (role && user.role !== role) {
     let target = "/";
 
     if (user.role === "faculty") target = "/faculty";
     if (user.role === "student") target = "/student/events";
 
-    // prevent loop
     if (location.pathname !== target) {
       return <Navigate to={target} replace />;
     }
   }
 
   return <>{children}</>;
-};
-
-export default ProtectedRoute;
+}

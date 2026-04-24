@@ -1,25 +1,31 @@
 import nodemailer from "nodemailer";
+import dotenv from "dotenv";
+dotenv.config();
+console.log("ENV EMAIL:", process.env.EMAIL);
+console.log("ENV PASS:", process.env.EMAIL_PASSWORD);
 
-export const sendEmail = async ({ to, subject, text, html }) => {
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL,
+    pass: process.env.EMAIL_PASSWORD,
+  },
+});
+
+export const sendEmail = async ({ to, subject, html, text }) => {
   try {
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER || "test@gmail.com",
-        pass: process.env.EMAIL_PASS || "password",
-      },
-    });
+    console.log("Sending email to:", to);
 
     await transporter.sendMail({
-      from: process.env.EMAIL_USER || "test@gmail.com",
+      from: process.env.EMAIL,
       to,
       subject,
       text,
       html,
     });
 
-    console.log("Email sent to", to);
-  } catch (error) {
-    console.error("Email error:", error.message);
+    console.log("Email sent to:", to);
+  } catch (err) {
+    console.log("EMAIL ERROR FULL:", err);
   }
 };

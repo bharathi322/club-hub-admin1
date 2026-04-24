@@ -28,9 +28,10 @@ const userSchema = new mongoose.Schema(
     year: { type: String, trim: true, default: "" },
     phone: { type: String, trim: true, default: "" },
     bio: { type: String, trim: true, default: "" },
-    assignedClubs: [
-      { type: mongoose.Schema.Types.ObjectId, ref: "Club", default: [] },
-    ],
+    assignedClubs: {
+  type: [{ type: mongoose.Schema.Types.ObjectId, ref: "Club" }],
+  default: [],
+},
     isActive: { type: Boolean, default: true },
     isApproved: { type: Boolean, default: true },
     emailVerified: { type: Boolean, default: false },

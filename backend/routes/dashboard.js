@@ -21,29 +21,20 @@ function scopedClubIds(user, clubs) {
   return clubs.map((club) => club._id);
 }
 
-router.get("/metrics", auth, async (req, res) => {
+router.get("/metrics", async (req, res) => {
   try {
-    const clubs = await Club.find(clubFilterForUser(req.user));
-    const clubIds = scopedClubIds(req.user, clubs);
-    const eventFilter = req.user.role === "faculty" ? { clubId: { $in: clubIds } } : {};
-    const events = await Event.find(eventFilter);
-    const proofs = await ProofSubmission.find(req.user.role === "faculty" ? { clubId: { $in: clubIds } } : {});
-    const registrations = await EventRegistration.countDocuments(
-      events.length ? { eventId: { $in: events.map((event) => event._id) } } : { _id: null }
-    );
+    const totalClubs = await Club.countDocuments();
+    const eventsThisMonth = await Event.countDocuments();
+    const pendingApprovals = await Event.countDocuments({ status: "pending" });
 
     res.json({
-      totalClubs: clubs.length,
-      upcomingEvents: events.filter((event) => ["approved", "postponed"].includes(event.status)).length,
-      reportsPending: proofs.filter((proof) => proof.status === "submitted").length,
-      totalParticipants: registrations,
-      averageRating: clubs.length
-        ? Number((clubs.reduce((sum, club) => sum + club.rating, 0) / clubs.length).toFixed(1))
-        : 0,
-      clubStatuses: clubs.map((club) => club.toDashboardCard()),
+      totalClubs,
+      eventsThisMonth,
+      pendingApprovals,
+      avgRating: 4.2, // temporary
     });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 });
 

@@ -9,12 +9,14 @@ import {
   Navigate,
   useLocation,
 } from "react-router-dom";
+
 import MediaDocuments from "@/pages/MediaDocuments";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import DashboardLayout from "@/components/DashboardLayout";
 import Settings from "./pages/Settings";
+
 // Pages
 import VerifyOtp from "./pages/VerifyOtp";
 import Login from "./pages/Login";
@@ -34,8 +36,6 @@ import StudentMyRegistrations from "./pages/student/StudentMyRegistrations";
 import StudentProfile from "./pages/student/StudentProfile";
 import StudentNotifications from "./pages/student/StudentNotifications";
 
-
-
 // Faculty
 import FacultyDashboard from "./pages/faculty/FacultyDashboard";
 import FacultyEvents from "./pages/faculty/FacultyEvents";
@@ -44,6 +44,7 @@ import FacultyFeedback from "./pages/faculty/FacultyFeedback";
 import FacultyAttendance from "./pages/faculty/FacultyAttendance";
 import FacultyAnalytics from "./pages/faculty/FacultyAnalytics";
 import FacultyAssignment from "@/pages/FacultyAssignment";
+
 const queryClient = new QueryClient();
 
 /* ================= ROLE ROUTE ================= */
@@ -57,7 +58,6 @@ const RoleRoute = ({
   const { user, loading } = useAuth();
 
   if (loading) return null;
-
   if (!user) return <Navigate to="/login" replace />;
 
   if (!allowedRoles.includes(user.role)) {
@@ -101,36 +101,14 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <Routes>
-<Route
-  path="/admin/settings"
-  element={
-    <ProtectedRoute>
-      <RoleRoute allowedRoles={["admin"]}>
-        <DashboardLayout>
-          <Settings />
-        </DashboardLayout>
-      </RoleRoute>
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/faculty"
-  element={
-    <ProtectedRoute>
-      <DashboardLayout>
-        <FacultyDashboard />
-      </DashboardLayout>
-    </ProtectedRoute>
-  }
-/>
-<Route path="/faculty" element={<FacultyDashboard />} />
+
               {/* AUTH */}
               <Route path="/login" element={<LoginRoute />} />
               <Route path="/verify-otp" element={<VerifyOtp />} />
               <Route path="/set-password/:token" element={<SetPassword />} />
 
-              {/* ROOT REDIRECT */}
-              <Route path="/" element={<Navigate to="/login" />} />
+              {/* ROOT */}
+              <Route path="/" element={<LoginRoute />} />
 
               {/* ================= ADMIN ================= */}
               <Route
@@ -146,7 +124,31 @@ const App = () => (
                 }
               />
 
-<Route path="/admin/media" element={<MediaDocuments />} />
+              <Route
+                path="/admin/settings"
+                element={
+                  <ProtectedRoute>
+                    <RoleRoute allowedRoles={["admin"]}>
+                      <DashboardLayout>
+                        <Settings />
+                      </DashboardLayout>
+                    </RoleRoute>
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/admin/media"
+                element={
+                  <ProtectedRoute>
+                    <RoleRoute allowedRoles={["admin"]}>
+                      <DashboardLayout>
+                        <MediaDocuments />
+                      </DashboardLayout>
+                    </RoleRoute>
+                  </ProtectedRoute>
+                }
+              />
 
               <Route
                 path="/admin/clubs"
@@ -187,23 +189,32 @@ const App = () => (
                 }
               />
 
+              <Route
+                path="/admin/faculty-assignment"
+                element={
+                  <ProtectedRoute>
+                    <RoleRoute allowedRoles={["admin"]}>
+                      <DashboardLayout>
+                        <FacultyAssignment />
+                      </DashboardLayout>
+                    </RoleRoute>
+                  </ProtectedRoute>
+                }
+              />
+
               {/* ================= FACULTY ================= */}
-             
-             
-             <Route
-  path="/admin/faculty-assignment"
-  element={
-    <ProtectedRoute>
-      <RoleRoute allowedRoles={["admin"]}>
-        <DashboardLayout>
-          <FacultyAssignment />
-        </DashboardLayout>
-      </RoleRoute>
-    </ProtectedRoute>
-  }
-/>
-
-
+              <Route
+                path="/faculty"
+                element={
+                  <ProtectedRoute>
+                    <RoleRoute allowedRoles={["faculty"]}>
+                      <DashboardLayout>
+                        <FacultyDashboard />
+                      </DashboardLayout>
+                    </RoleRoute>
+                  </ProtectedRoute>
+                }
+              />
 
               <Route
                 path="/faculty/events"

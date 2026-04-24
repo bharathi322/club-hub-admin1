@@ -6,7 +6,7 @@ import api from "@/api/api";
 export const useCreateClub = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: any) => api.post("/clubs", data),
+mutationFn: (data: any) => api.post("/admin/assign-faculty", data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["clubs"] }),
   });
 };

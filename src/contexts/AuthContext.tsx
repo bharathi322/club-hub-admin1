@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import api from "@/api/api";
 import { socket } from "@/lib/socket";
+import { checkTokenExpiry } from "@/utils/auth";
 
 interface User {
   _id: string;
@@ -36,11 +37,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const storedUser = localStorage.getItem("user");
       const token = localStorage.getItem("token");
 
-      if (storedUser && token) {
+      const valid = checkTokenExpiry();
+
+      if (storedUser && token && valid) {
         const parsed = JSON.parse(storedUser);
         if (parsed?._id) {
           setUser(parsed);
         }
+      } else {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
       }
     } catch (err) {
       console.error("Auth error:", err);
@@ -50,7 +56,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
-  // ✅ SINGLE SOURCE OF SOCKET CONNECTION
+  // 🔥 AUTO LOGOUT ON TOKEN EXPIRY (NEW)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const valid = checkTokenExpiry();
+
+      if (!valid) {
+        socket.disconnect();
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        setUser(null);
+      }
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // SOCKET CONNECTION
   useEffect(() => {
     if (user && user._id) {
       if (!socket.connected) {
@@ -70,22 +92,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // LOGIN
   const login = async (credentials: {
-  email: string;
-  password: string;
-}) => {
-  const res = await api.post("/auth/login", credentials);
+    email: string;
+    password: string;
+  }) => {
+    const res = await api.post("/auth/login", credentials);
 
-  console.log("LOGIN RESPONSE:", res.data); // 🔥 ADD THIS
+    console.log("LOGIN RESPONSE:", res.data);
 
-  if (!res?.data?.user || !res?.data?.token) {
-    throw new Error("Invalid response from server");
-  }
+    if (!res?.data?.user || !res?.data?.token) {
+      throw new Error("Invalid response from server");
+    }
 
-  localStorage.setItem("token", res.data.token);
-  localStorage.setItem("user", JSON.stringify(res.data.user));
+    localStorage.setItem("token", res.data.token);
+    localStorage.setItem("user", JSON.stringify(res.data.user));
 
-  setUser(res.data.user);
-};
+    setUser(res.data.user);
+  };
 
   // SIGNUP
   const signup = async (data: {
@@ -110,12 +132,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.setItem("token", res.data.token);
     localStorage.setItem("user", JSON.stringify(res.data.user));
 
-    setUser(res.data.user); // ✅ socket handled by useEffect
+    setUser(res.data.user);
   };
 
   // LOGOUT
   const logout = () => {
-    socket.disconnect(); // ✅ correct
+    socket.disconnect();
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     setUser(null);

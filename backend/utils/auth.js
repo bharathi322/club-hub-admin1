@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 
-// create token (main)
+// create JWT token
 export const signToken = (userId) => {
   return jwt.sign(
     { id: userId },
@@ -9,13 +10,18 @@ export const signToken = (userId) => {
   );
 };
 
-// createToken (for reset, compatibility kept)
+// random reset token
 export const createToken = () => {
-  return require("crypto").randomBytes(32).toString("hex");
+  return crypto.randomBytes(32).toString("hex");
+};
+
+// 6-digit confirmation code
+export const createConfirmationCode = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
 // random password
-export function randomPassword(length = 8) {
+export const randomPassword = (length = 8) => {
   const chars =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$";
 
@@ -25,13 +31,13 @@ export function randomPassword(length = 8) {
   }
 
   return password;
-}
+};
 
-// numeric OTP / code
-export function randomNumericCode(length = 6) {
+// numeric OTP
+export const randomNumericCode = (length = 6) => {
   let code = "";
   for (let i = 0; i < length; i++) {
     code += Math.floor(Math.random() * 10);
   }
   return code;
-}
+};

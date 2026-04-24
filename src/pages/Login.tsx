@@ -40,7 +40,6 @@ const Login = () => {
           studentId,
         });
 
-        // store email for OTP page
         localStorage.setItem("otpEmail", email);
 
         toast({
@@ -55,23 +54,19 @@ const Login = () => {
       else {
         await login({ email, password });
 
-        const storedUser = JSON.parse(
-          localStorage.getItem("user") || "{}"
-        );
+        // ✅ SAFE FIX: wait for localStorage to update
+        await new Promise((res) => setTimeout(res, 50));
+
+        const userData = JSON.parse(localStorage.getItem("user") || "{}");
 
         toast({
           title: "Success",
           description: "Login successful",
         });
 
-        // role-based redirect
-        if (storedUser.role === "admin") {
-          navigate("/admin");
-        } else if (storedUser.role === "faculty") {
-          navigate("/faculty");
-        } else {
-          navigate("/student");
-        }
+        if (userData.role === "admin") navigate("/admin");
+        else if (userData.role === "faculty") navigate("/faculty");
+        else navigate("/student");
       }
     } catch (err: any) {
       const message =
@@ -110,7 +105,7 @@ const Login = () => {
 
         <CardContent className="space-y-4">
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* NAME */}
+            
             {isSignup && (
               <div className="space-y-2">
                 <Label>Name</Label>
@@ -123,7 +118,6 @@ const Login = () => {
               </div>
             )}
 
-            {/* EMAIL */}
             <div className="space-y-2">
               <Label>Email</Label>
               <Input
@@ -135,7 +129,6 @@ const Login = () => {
               />
             </div>
 
-            {/* STUDENT ID */}
             {isSignup && (
               <div className="space-y-2">
                 <Label>Student ID</Label>
@@ -148,7 +141,6 @@ const Login = () => {
               </div>
             )}
 
-            {/* PASSWORD */}
             <div className="space-y-2">
               <Label>Password</Label>
               <Input
@@ -160,7 +152,6 @@ const Login = () => {
               />
             </div>
 
-            {/* BUTTON */}
             <Button type="submit" className="w-full" disabled={loading}>
               {loading && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -169,7 +160,6 @@ const Login = () => {
             </Button>
           </form>
 
-          {/* TOGGLE */}
           <p className="text-center text-sm text-muted-foreground">
             {isSignup
               ? "Already have an account?"

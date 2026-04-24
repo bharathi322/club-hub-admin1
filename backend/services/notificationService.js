@@ -1,7 +1,7 @@
 import Notification from "../models/Notification.js";
 import { emitToUser } from "../socketManager.js";
 
-// Create single notification
+// CREATE SINGLE NOTIFICATION
 export const createNotification = async ({
   userId,
   title,
@@ -18,19 +18,23 @@ export const createNotification = async ({
       relatedEvent,
     });
 
-    emitToUser(userId.toString(), "notification", {
-      title,
-      description: message,
-      type,
-    });
+    // realtime emit
+    if (userId) {
+      emitToUser(userId.toString(), "notification", {
+        title,
+        description: message,
+        type,
+      });
+    }
 
     return notification;
   } catch (err) {
     console.error("createNotification error:", err);
+    return null;
   }
 };
 
-// Notify multiple users
+// NOTIFY MULTIPLE USERS
 export const notifyMany = async (userIds = [], payload = {}) => {
   try {
     if (!userIds.length) return;
@@ -38,7 +42,7 @@ export const notifyMany = async (userIds = [], payload = {}) => {
     const notifications = userIds.map((id) => ({
       user: id,
       title: payload.title || "Notification",
-      description: payload.description || "",
+      description: payload.message || payload.description || "",
       type: payload.type || "info",
       relatedEvent: payload.relatedEvent || null,
     }));
@@ -47,7 +51,11 @@ export const notifyMany = async (userIds = [], payload = {}) => {
 
     // realtime emit
     for (const id of userIds) {
-      emitToUser(id.toString(), "notification", payload);
+      emitToUser(id.toString(), "notification", {
+        title: payload.title,
+        description: payload.message || payload.description,
+        type: payload.type || "info",
+      });
     }
   } catch (err) {
     console.error("notifyMany error:", err);
