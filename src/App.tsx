@@ -9,6 +9,7 @@ import {
   Navigate,
   useLocation,
 } from "react-router-dom";
+import ResetPassword from "./pages/ResetPassword";
 
 import MediaDocuments from "@/pages/MediaDocuments";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
@@ -101,7 +102,7 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <Routes>
-
+<Route path="/reset-password" element={<ResetPassword />} />
               {/* AUTH */}
               <Route path="/login" element={<LoginRoute />} />
               <Route path="/verify-otp" element={<VerifyOtp />} />
@@ -110,6 +111,8 @@ const App = () => (
               {/* ROOT */}
               <Route path="/" element={<LoginRoute />} />
 
+
+<Route path="/faculty/events/:eventId/attendance" element={<FacultyAttendance />} />
               {/* ================= ADMIN ================= */}
               <Route
                 path="/admin"

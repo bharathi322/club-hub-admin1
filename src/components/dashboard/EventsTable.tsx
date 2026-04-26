@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { socket } from "@/lib/socket";
-
+import api from "@/api/api";
 import { useEvents, useClubs } from "@/hooks/use-dashboard-api";
 import {
   useCreateEvent,
@@ -33,7 +33,7 @@ const EventsTable = ({ facultyView }: { facultyView?: boolean }) => {
 
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const pageSize = 5;
+  const pageSize = 5000;
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<any>(null);
@@ -56,7 +56,7 @@ const EventsTable = ({ facultyView }: { facultyView?: boolean }) => {
       );
     };
 
-    const handleDelete = (id: string) => {
+    const handleDeleteSocket = (id: string) => {
       queryClient.setQueryData(["events"], (old: any) =>
         old?.filter((e: any) => e._id !== id)
       );
@@ -64,10 +64,8 @@ const EventsTable = ({ facultyView }: { facultyView?: boolean }) => {
 
     socket.on("event:created", handleCreate);
     socket.on("event:updated", handleUpdate);
-
-    // ✅ FIXED SOCKET NAME
     socket.on("event:deleted", (data: any) => {
-      handleDelete(data.eventId);
+      handleDeleteSocket(data.eventId);
     });
 
     return () => {
@@ -100,10 +98,7 @@ const EventsTable = ({ facultyView }: { facultyView?: boolean }) => {
     if (safePage !== page) setPage(safePage);
   }, [safePage, page]);
 
-  const paginatedEvents = filteredEvents.slice(
-    (safePage - 1) * pageSize,
-    safePage * pageSize
-  );
+  const paginatedEvents = filteredEvents;
 
   /* ================= CREATE / UPDATE ================= */
   const handleSubmit = (data: any) => {
@@ -124,19 +119,44 @@ const EventsTable = ({ facultyView }: { facultyView?: boolean }) => {
 
     deleteEvent.mutate(deletingId, {
       onSuccess: () => {
-        // ✅ instant UI update
-        queryClient.setQueryData(["events"], (old: any) =>
-          old?.filter((e: any) => e._id !== deletingId)
-        );
+  queryClient.setQueryData(["events"], (old: any) =>
+    old?.filter((e: any) => e._id !== deletingId)
+  );
 
-        setDeleteOpen(false);
-        setDeletingId(null);
-        toast({ title: "Deleted successfully" });
-      },
+  // ✅ ADD THESE 3 LINES
+  queryClient.invalidateQueries();
+
+  setDeleteOpen(false);
+  setDeletingId(null);
+  toast({ title: "Deleted successfully" });
+},
       onError: (err) => {
         console.log("Delete error:", err);
       },
     });
+  };
+
+  /* ================= UPLOAD ================= */
+  const handleUpload = async (e: any, eventId: string) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const formData = new FormData();
+
+    for (let file of files) {
+      formData.append("files", file);
+    }
+
+    try {
+      await api.post(`/events/${eventId}/upload`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      toast({ title: "Files uploaded successfully" });
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Upload failed" });
+    }
   };
 
   return (
@@ -172,6 +192,7 @@ const EventsTable = ({ facultyView }: { facultyView?: boolean }) => {
                 <tr>
                   <th>Name</th>
                   <th>Club</th>
+                  <th>Faculty</th>
                   <th>Date</th>
                   <th>Status</th>
                   <th>Actions</th>
@@ -183,17 +204,22 @@ const EventsTable = ({ facultyView }: { facultyView?: boolean }) => {
                   <tr key={event._id}>
                     <td>{event.name}</td>
 
-                    {/* ✅ FIXED clubId */}
                     <td>
-  {event.clubId?.name ||
-    clubs.find(
-      (c: any) =>
-        String(c._id) === String(event.clubId?._id || event.clubId)
-    )?.name ||
-    "Unknown Club"}
+  {typeof event.clubId === "object"
+    ? event.clubId?.name
+    : clubs.find(
+        (c: any) => String(c._id) === String(event.clubId)
+      )?.name || "Unknown Club"}
 </td>
-<td>{event.facultyId?.name || "Unknown Faculty"}</td>
-                    <td>{event.date}</td>
+
+<td>
+  {event.facultyName ||
+    (typeof event.facultyId === "object"
+      ? event.facultyId?.name
+      : "Unknown Faculty")}
+</td>
+
+<td>{event.date?.split("T")[0]}</td>
                     <td>{event.status}</td>
 
                     <td className="space-x-2">
@@ -207,23 +233,33 @@ const EventsTable = ({ facultyView }: { facultyView?: boolean }) => {
                         Edit
                       </Button>
 
-                      {(
-  user?.role === "admin" ||
-  (user?.role === "faculty" &&
-    user?.assignedClubs?.includes(String(event.clubId)))
-) && (
-  <Button
-  size="sm"
-  variant="destructive"
-  disabled={deleteEvent.isPending}
-  onClick={() => {
-    setDeletingId(String(event._id));
-    setDeleteOpen(true);
-  }}
->
-  Delete
-</Button>
-)}
+                      {facultyView && (
+                        <input
+                          type="file"
+                          multiple
+                          onChange={(e) =>
+                            handleUpload(e, event._id)
+                          }
+                        />
+                      )}
+
+                      {(user?.role === "admin" ||
+                        (user?.role === "faculty" &&
+                          user?.assignedClubs?.includes(
+String(event.clubId?._id || event.clubId)
+                          ))) && (
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          disabled={deleteEvent.isPending}
+                          onClick={() => {
+                            setDeletingId(String(event._id));
+                            setDeleteOpen(true);
+                          }}
+                        >
+                          Delete
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -244,15 +280,16 @@ const EventsTable = ({ facultyView }: { facultyView?: boolean }) => {
       />
 
       <DeleteConfirmDialog
-  open={deleteOpen}
-  onOpenChange={setDeleteOpen}
-  title="Delete Event"
-  description={`Are you sure you want to delete "${
-    safeEvents.find((e: any) => e._id === deletingId)?.name || "this event"
-  }"? This action cannot be undone.`}
-  onConfirm={handleDelete}
-  isLoading={deleteEvent.isPending}
-/>
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete Event"
+        description={`Are you sure you want to delete "${
+          safeEvents.find((e: any) => e._id === deletingId)?.name ||
+          "this event"
+        }"?`}
+        onConfirm={handleDelete}
+        isLoading={deleteEvent.isPending}
+      />
     </div>
   );
 };

@@ -17,12 +17,17 @@ import attendanceRoutes from "./routes/attendance.js";
 import proofRoutes from "./routes/proofs.js";
 import feedbackRoutes from "./routes/feedback.js";
 import { initSocket, registerSocketUser, unregisterSocket } from "./socket.js";
+import cron from "node-cron";
+import Event from "./models/Event.js";
+import EventRegistration from "./models/EventRegistration.js";
+import userRoutes from "./routes/user.js";
+
+
 
 import path from "path";
 
-dotenv.config({
-  path: path.resolve(process.cwd(), ".env"),
-});
+dotenv.config();
+console.log("JWT SECRET:", process.env.JWT_SECRET);
 console.log("EMAIL FROM SERVER:", process.env.EMAIL);
 console.log("PASS FROM SERVER:", process.env.EMAIL_PASSWORD);
 const app = express();
@@ -41,16 +46,48 @@ const io = new Server(server, {
 });
 
 initSocket(io);
+app.set("io", io);
+cron.schedule("*/5 * * * *", async () => {
+  console.log("Running auto attendance check...");
+
+  try {
+    const now = new Date();
+
+    const events = await Event.find();
+
+    for (const event of events) {
+      const eventTime = new Date(`${event.date} ${event.time}`);
+
+      if (now > eventTime) {
+        await EventRegistration.updateMany(
+          {
+            eventId: event._id,
+            status: "registered",
+          },
+          {
+            $set: { status: "absent" },
+          }
+        );
+      }
+    }
+  } catch (err) {
+    console.error("Cron error:", err.message);
+  }
+});
 
 app.use(
   cors({
     origin: allowedOrigins,
     credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"],
+    methods: ["GET", "POST", "PUT", "DELETE"],
   })
 );
+
 app.use(express.json());
 app.use("/uploads", express.static("backend/uploads"));
 
+app.use("/api/user", userRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/clubs", clubRoutes);
 app.use("/api/events", eventRoutes);

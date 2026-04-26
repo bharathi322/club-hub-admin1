@@ -9,6 +9,7 @@ interface User {
   email: string;
   role: "admin" | "faculty" | "student";
   assignedClub?: string | null;
+  profileImage?: string; // ✅ added
 }
 
 interface AuthContextType {
@@ -23,15 +24,15 @@ interface AuthContextType {
   }) => Promise<any>;
   verifyOtp: (email: string, otp: string) => Promise<void>;
   logout: () => void;
+  setUser: (user: User | null) => void;   // ✅ ADD THIS
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(null); // ✅ FIXED
   const [loading, setLoading] = useState(true);
 
-  // LOAD USER FROM LOCAL STORAGE
   useEffect(() => {
     try {
       const storedUser = localStorage.getItem("user");
@@ -56,7 +57,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
-  // 🔥 AUTO LOGOUT ON TOKEN EXPIRY (NEW)
   useEffect(() => {
     const interval = setInterval(() => {
       const valid = checkTokenExpiry();
@@ -72,12 +72,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => clearInterval(interval);
   }, []);
 
-  // SOCKET CONNECTION
   useEffect(() => {
     if (user && user._id) {
-      if (!socket.connected) {
-        socket.connect();
-      }
+      if (!socket.connected) socket.connect();
 
       socket.emit("register", {
         userId: user._id,
@@ -90,14 +87,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [user]);
 
-  // LOGIN
-  const login = async (credentials: {
-    email: string;
-    password: string;
-  }) => {
+  const login = async (credentials: { email: string; password: string }) => {
     const res = await api.post("/auth/login", credentials);
-
-    console.log("LOGIN RESPONSE:", res.data);
 
     if (!res?.data?.user || !res?.data?.token) {
       throw new Error("Invalid response from server");
@@ -109,25 +100,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(res.data.user);
   };
 
-  // SIGNUP
-  const signup = async (data: {
-    name: string;
-    email: string;
-    password: string;
-    studentId: string;
-  }) => {
+  const signup = async (data: any) => {
     const res = await api.post("/auth/signup", data);
     localStorage.setItem("token", res.data.token);
     return res.data;
   };
 
-  // VERIFY OTP
   const verifyOtp = async (email: string, otp: string) => {
     const res = await api.post("/auth/verify-otp", { email, otp });
-
-    if (!res?.data?.user || !res?.data?.token) {
-      throw new Error("OTP verification failed");
-    }
 
     localStorage.setItem("token", res.data.token);
     localStorage.setItem("user", JSON.stringify(res.data.user));
@@ -135,7 +115,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(res.data.user);
   };
 
-  // LOGOUT
   const logout = () => {
     socket.disconnect();
     localStorage.removeItem("token");
@@ -145,7 +124,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, signup, verifyOtp, logout }}
+      value={{ user, setUser, loading, login, signup, verifyOtp, logout }}
     >
       {!loading && children}
     </AuthContext.Provider>

@@ -8,15 +8,26 @@ import auth from "../middleware/auth.js";
 import permit from "../middleware/role.js";
 import { sendEmail } from "../services/emailService.js";
 import { createNotification } from "../services/notificationService.js";
-
+import { randomNumericCode } from "../utils/auth.js";
 const router = express.Router();
+
+function createConfirmationCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
 router.use(auth, permit("student"));
 
 router.get("/events", async (req, res) => {
   try {
-    const events = await Event.find({ status: { $in: ["approved", "postponed"] } })
-      .populate("clubId", "name")
-      .sort({ date: 1, time: 1 });
+
+const events = await Event.find({
+  status: { $in: ["approved", "postponed"] },
+  ...(req.user.assignedClubs && req.user.assignedClubs.length
+    ? { clubId: { $in: req.user.assignedClubs } }
+    : {})
+})
+  .populate("clubId", "name")
+  .sort({ date: 1, time: 1 });
+    
 
     const registrations = await EventRegistration.find({
       studentId: req.user._id,
@@ -47,9 +58,9 @@ router.post("/events/:id/register", async (req, res) => {
       return res.status(404).json({ message: "Event not available for registration" });
     }
 
-    if (event.registeredCount >= event.maxCapacity) {
-      return res.status(400).json({ message: "No seats remaining" });
-    }
+    if (event.maxCapacity && event.registeredCount >= event.maxCapacity) {
+  return res.status(400).json({ message: "No seats remaining" });
+}
 
     const existing = await EventRegistration.findOne({
       eventId: event._id,
@@ -65,18 +76,18 @@ router.post("/events/:id/register", async (req, res) => {
           {
             status: "registered",
             cancelledAt: null,
-            confirmationCode: createConfirmationCode(),
+            confirmationCode: randomNumericCode(6),
           },
           { new: true }
         )
       : await EventRegistration.create({
           eventId: event._id,
           studentId: req.user._id,
-          confirmationCode: createConfirmationCode(),
+          confirmationCode: randomNumericCode(6),
         });
 
-    event.registeredCount += existing?.status === "cancelled" ? 1 : 1;
-    await event.save();
+event.registeredCount = (event.registeredCount || 0) + 1;
+        await event.save();
 
     await sendEmail({
       to: req.user.email,
@@ -103,37 +114,45 @@ router.post("/events/:id/register", async (req, res) => {
 
 router.delete("/events/:id/register", async (req, res) => {
   try {
+    const studentId = req.user._id;
+    const eventId = req.params.id;
+
+    const event = await Event.findById(eventId);
+    if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+
+    // 🔥 DEADLINE: 2 hours before event
+    const eventDateTime = new Date(`${event.date} ${event.time}`);
+    const now = new Date();
+
+    const diffHours = (eventDateTime - now) / (1000 * 60 * 60);
+
+    if (diffHours <= 2) {
+      return res.status(400).json({
+        message: "Cannot cancel within 2 hours of event",
+      });
+    }
+
     const registration = await EventRegistration.findOne({
-      eventId: req.params.id,
-      studentId: req.user._id,
-      status: { $ne: "cancelled" },
+      eventId,
+      studentId,
     });
 
     if (!registration) {
-      return res.status(404).json({ message: "Registration not found" });
+      return res.status(404).json({ message: "Not registered" });
     }
 
     registration.status = "cancelled";
     registration.cancelledAt = new Date();
     await registration.save();
 
-    const event = await Event.findById(req.params.id);
-    if (event) {
-      event.registeredCount = Math.max(event.registeredCount - 1, 0);
-      await event.save();
-      await sendEmail({
-        to: req.user.email,
-        subject: `Registration cancelled for ${event.name}`,
-        template: "event-registration-cancelled",
-        html: `<p>Your registration for ${event.name} has been cancelled.</p>`,
-        text: `Your registration for ${event.name} has been cancelled.`,
-        metadata: { eventId: String(event._id), studentId: String(req.user._id) },
-      });
-    }
+    event.registeredCount = Math.max((event.registeredCount || 1) - 1, 0);
+    await event.save();
 
-    res.json({ message: "Registration cancelled" });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.json({ message: "Cancelled successfully" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 });
 
@@ -214,5 +233,46 @@ router.post("/feedback", async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
+
+router.delete("/events/:id/cancel", async (req, res) => {
+  try {
+    const studentId = req.user._id;
+    const eventId = req.params.id;
+
+    const event = await Event.findById(eventId);
+    if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+
+    const registration = await EventRegistration.findOne({
+      eventId,
+      studentId,
+    });
+
+    if (!registration) {
+      return res.status(404).json({ message: "Not registered" });
+    }
+
+    // ❌ BLOCK CANCEL AFTER REGISTER
+    if (registration.status === "registered") {
+      return res.status(400).json({
+        message: "Cannot unregister once registered",
+      });
+    }
+
+    // ✅ ALLOW cancel only if already cancelled (safe fallback)
+    registration.status = "cancelled";
+    registration.cancelledAt = new Date();
+    await registration.save();
+
+    event.registeredCount = Math.max((event.registeredCount || 1) - 1, 0);
+    await event.save();
+
+    res.json({ message: "Cancelled successfully" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 
 export default router;

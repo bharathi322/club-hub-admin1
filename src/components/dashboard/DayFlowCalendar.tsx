@@ -7,6 +7,7 @@ import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCalendarEvents } from "@/hooks/use-dashboard-api";
 import { Skeleton } from "@/components/ui/skeleton";
+import api from "@/api/api";
 
 const statusVariant: Record<
   string,
@@ -30,6 +31,16 @@ const DayFlowCalendar = () => {
 
   const dayEvents = data?.events || [];
 
+  // ✅ approve / reject
+  const updateStatus = async (id: string, status: string) => {
+    try {
+      await api.put(`/admin/events/${id}/status`, { status });
+      window.location.reload();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   return (
     <Card className="shadow-card">
       <CardHeader className="pb-3">
@@ -48,7 +59,7 @@ const DayFlowCalendar = () => {
         />
 
         <div className="space-y-1">
-          <h4 className="text-sm font-semibold text-card-foreground">
+          <h4 className="text-sm font-semibold">
             {selectedDate
               ? format(selectedDate, "EEEE, MMMM d, yyyy")
               : "Select a date"}
@@ -76,41 +87,59 @@ const DayFlowCalendar = () => {
                   return (
                     <div
                       key={i}
-                      className="flex items-start gap-3 p-2 rounded-lg bg-muted/50 border border-border"
+                      className="flex flex-col gap-2 p-2 rounded-lg bg-muted/50 border"
                     >
-                      <div className="flex items-center gap-1 text-muted-foreground min-w-[80px]">
-                        <Clock className="h-3 w-3" />
-                        <span className="text-xs">
-                          {event?.time || "--"}
-                        </span>
+                      {/* EVENT INFO */}
+                      <div className="flex items-start gap-3">
+                        <div className="flex items-center gap-1 min-w-[80px]">
+                          <Clock className="h-3 w-3" />
+                          <span className="text-xs">
+                            {event?.time || "--"}
+                          </span>
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {event?.title || "Untitled Event"}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {event?.club || "Unknown Club"}
+                          </p>
+                        </div>
+
+                        <Badge variant={status} className="text-[10px]">
+                          {event?.status || "unknown"}
+                        </Badge>
                       </div>
 
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-card-foreground truncate">
-                          {event?.title || "Untitled Event"}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {event?.club || "Unknown Club"}
-                        </p>
-                      </div>
+                      {/* APPROVE / REJECT BUTTONS */}
+                      {event?.status === "pending" && (
+                        <div className="flex gap-2 ml-[90px]">
+                          <button
+                            className="bg-green-500 text-white px-2 py-1 rounded text-xs"
+                            onClick={() =>
+                              updateStatus(event._id, "approved")
+                            }
+                          >
+                            Approve
+                          </button>
 
-                      <Badge
-                        variant={status}
-                        className="text-[10px] capitalize"
-                      >
-                        {event?.status || "unknown"}
-                      </Badge>
+                          <button
+                            className="bg-red-500 text-white px-2 py-1 rounded text-xs"
+                            onClick={() =>
+                              updateStatus(event._id, "rejected")
+                            }
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </motion.div>
             ) : (
-              <motion.p
-                key="empty"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="text-sm text-muted-foreground py-4 text-center"
-              >
+              <motion.p className="text-sm text-center py-4">
                 No events scheduled
               </motion.p>
             )}

@@ -3,6 +3,10 @@ import crypto from "crypto";
 
 // create JWT token
 export const signToken = (userId) => {
+
+  // DEBUG
+  console.log("SIGN SECRET:", process.env.JWT_SECRET);
+
   return jwt.sign(
     { id: userId },
     process.env.JWT_SECRET,

@@ -21,7 +21,7 @@ export function connectSocket(userId: string, role: string) {
   const s = getSocket();
   if (!s.connected) {
     s.connect();
-    s.emit("join", { userId, role });
+s.emit("register", { userId, role });
   }
   return s;
 }

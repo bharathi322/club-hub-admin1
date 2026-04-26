@@ -4,17 +4,20 @@ import { useAuth } from "@/contexts/AuthContext";
 
 // COMMON FETCH
 const fetchData = async (url: string) => {
-  try {
-    const res = await api.get(url);
+  const res = await api.get(url);
 
-    if (Array.isArray(res.data)) return res.data;
-    if (Array.isArray(res.data?.events)) return res.data.events;
+  if (Array.isArray(res.data)) return res.data;
+  if (Array.isArray(res.data?.events)) return res.data.events;
 
-    return res.data || [];
-  } catch (err) {
-    console.error("API ERROR:", err);
-    return [];
-  }
+  return res.data || [];
+};
+
+/* ================= COMMON CONFIG ================= */
+
+const baseConfig = {
+  staleTime: 1000 * 60, // 1 min
+  refetchOnMount: false,
+  refetchOnWindowFocus: false,
 };
 
 /* ================= DASHBOARD ================= */
@@ -23,30 +26,35 @@ export const useMetrics = () =>
   useQuery({
     queryKey: ["metrics"],
     queryFn: () => fetchData("/dashboard/metrics"),
+    ...baseConfig,
   });
 
 export const useQuickStats = () =>
   useQuery({
     queryKey: ["quick-stats"],
     queryFn: () => fetchData("/dashboard/quick-stats"),
+    ...baseConfig,
   });
 
 export const useFacultyBudget = () =>
   useQuery({
     queryKey: ["faculty-budget"],
     queryFn: () => fetchData("/dashboard/faculty-budget"),
+    ...baseConfig,
   });
 
 export const useBudget = () =>
   useQuery({
     queryKey: ["budget"],
     queryFn: () => fetchData("/dashboard/budget"),
+    ...baseConfig,
   });
 
 export const useMonthlyEvents = () =>
   useQuery({
     queryKey: ["monthly-events"],
     queryFn: () => fetchData("/dashboard/monthly-events"),
+    ...baseConfig,
   });
 
 export const useCalendarEvents = (date?: string) =>
@@ -58,6 +66,7 @@ export const useCalendarEvents = (date?: string) =>
       return res.data;
     },
     enabled: !!date,
+    ...baseConfig,
   });
 
 /* ================= CLUBS ================= */
@@ -66,6 +75,7 @@ export const useClubs = () =>
   useQuery({
     queryKey: ["clubs"],
     queryFn: () => fetchData("/clubs"),
+    ...baseConfig,
   });
 
 /* ================= EVENTS ================= */
@@ -75,21 +85,24 @@ export const useEvents = () => {
 
   return useQuery({
     queryKey: ["events"],
-    queryFn: async () => {
-      if (!user) return [];
-      return fetchData("/events");
-    },
+    queryFn: () => fetchData("/events"),
     enabled: !!user,
+    ...baseConfig,
   });
 };
 
 /* ================= NOTIFICATIONS ================= */
 
-export const useNotifications = () =>
-  useQuery({
+export const useNotifications = () => {
+  const { user } = useAuth();
+
+  return useQuery({
     queryKey: ["notifications"],
     queryFn: () => fetchData("/notifications"),
+    enabled: !!user,
+    ...baseConfig,
   });
+};
 
 /* ================= FACULTY ================= */
 
@@ -97,56 +110,73 @@ export const useFacultyStats = () =>
   useQuery({
     queryKey: ["faculty-stats"],
     queryFn: () => fetchData("/faculty/stats"),
+    ...baseConfig,
   });
 
 export const useFacultyEvents = () =>
   useQuery({
     queryKey: ["faculty-events"],
     queryFn: () => fetchData("/faculty/events"),
+    ...baseConfig,
   });
 
 export const useFacultyClub = () =>
   useQuery({
     queryKey: ["faculty-club"],
     queryFn: () => fetchData("/faculty/my-club"),
+    ...baseConfig,
   });
 
 export const useFacultyRegistrations = () =>
   useQuery({
     queryKey: ["faculty-registrations"],
     queryFn: () => fetchData("/faculty/registrations"),
+    ...baseConfig,
   });
 
 /* ================= STUDENT ================= */
 
-export const useStudentEvents = () =>
-  useQuery({
-    queryKey: ["student-events"],
-    queryFn: () => fetchData("/student/events"),
-  });
+export const useStudentEvents = () => {
+  const { user } = useAuth();
 
-export const useMyRegistrations = () =>
-  useQuery({
+  return useQuery({
+  queryKey: ["student-events"],
+  queryFn: () => fetchData("/student/events"),
+  enabled: !!user,
+  retry: false,   // 👈 ADD THIS LINE
+});
+};
+
+export const useMyRegistrations = () => {
+  const { user } = useAuth();
+
+  return useQuery({
     queryKey: ["my-registrations"],
     queryFn: () => fetchData("/student/my-registrations"),
+    enabled: !!user,
+    ...baseConfig,
   });
+};
 
 export const useMyFeedback = () =>
   useQuery({
     queryKey: ["my-feedback"],
     queryFn: () => fetchData("/feedback"),
+    ...baseConfig,
   });
 
 export const useStudentClubs = () =>
   useQuery({
     queryKey: ["student-clubs"],
     queryFn: () => fetchData("/clubs"),
+    ...baseConfig,
   });
 
 export const useMediaStats = () =>
   useQuery({
     queryKey: ["media-stats"],
     queryFn: () => fetchData("/dashboard/media-stats"),
+    ...baseConfig,
   });
 
 /* ================= COMPLAINTS ================= */
@@ -155,4 +185,12 @@ export const useComplaints = () =>
   useQuery({
     queryKey: ["complaints"],
     queryFn: () => fetchData("/complaints"),
+    ...baseConfig,
+  });
+
+export const useFacultyList = () =>
+  useQuery({
+    queryKey: ["faculty-list"],
+    queryFn: () => fetchData("/faculty"),
+    ...baseConfig,
   });

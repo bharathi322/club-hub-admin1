@@ -38,6 +38,9 @@ const EventFormDialog = ({
   const [budgetSpent, setBudgetSpent] = useState("");
   const [files, setFiles] = useState<File[]>([]);
 
+  // ✅ ADDED (no existing logic changed)
+  const [facultyId, setFacultyId] = useState("");
+
   // ✅ Convert to AM/PM
   const formatTime = (time: string) => {
     if (!time) return "";
@@ -57,7 +60,7 @@ const EventFormDialog = ({
       setName(event.name || "");
       setClub(event.clubId || "");
       setDate(event.date ? event.date.split("T")[0] : "");
-      setTime(event.time || ""); // keep as 24h internally
+      setTime(event.time || "");
       setBudgetSpent(String(event.budgetSpent || 0));
     } else {
       setName("");
@@ -69,12 +72,25 @@ const EventFormDialog = ({
     }
   }, [event, open]);
 
-  // ✅ Faculty auto club
+  // ✅ Faculty auto club (existing)
   useEffect(() => {
     if (user?.role === "faculty" && user?.assignedClubs?.length > 0) {
       setClub(user.assignedClubs[0]);
     }
   }, [user]);
+
+  // ✅ NEW: Auto assign faculty when club changes
+  useEffect(() => {
+    if (!club || !clubs) return;
+
+    const selectedClub = clubs.find(
+      (c: any) => String(c._id) === String(club)
+    );
+
+    if (selectedClub?.facultyIds?.length > 0) {
+      setFacultyId(selectedClub.facultyIds[0]);
+    }
+  }, [club, clubs]);
 
   // ✅ Submit
   const handleSubmit = (e: React.FormEvent) => {
@@ -84,8 +100,13 @@ const EventFormDialog = ({
     formData.append("name", name);
     formData.append("clubId", club);
     formData.append("date", date);
-    formData.append("time", time); // store 24h format
+    formData.append("time", time);
     formData.append("budgetSpent", String(Number(budgetSpent) || 0));
+
+    // ✅ NEW: send facultyId
+    if (facultyId) {
+      formData.append("facultyId", facultyId);
+    }
 
     files.forEach((file) => {
       formData.append("attachments", file);
@@ -164,7 +185,6 @@ const EventFormDialog = ({
                 required
               />
 
-              {/* ✅ AM/PM display */}
               {time && (
                 <p className="text-sm text-gray-500 mt-1">
                   Selected: {formatTime(time)}
@@ -181,7 +201,7 @@ const EventFormDialog = ({
             placeholder="Budget"
           />
 
-          {/* Upload only after completion */}
+          {/* Upload */}
           {event && event.status === "completed" && (
             <Input
               type="file"

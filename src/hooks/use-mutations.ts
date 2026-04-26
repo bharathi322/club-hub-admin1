@@ -6,7 +6,7 @@ import api from "@/api/api";
 export const useCreateClub = () => {
   const qc = useQueryClient();
   return useMutation({
-mutationFn: (data: any) => api.post("/admin/assign-faculty", data),
+    mutationFn: (data: any) => api.post("/admin/assign-faculty", data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["clubs"] }),
   });
 };
@@ -35,7 +35,7 @@ export const useCreateEvent = () => {
   return useMutation({
     mutationFn: (data: any) => api.post("/events", data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["events"] }); // works as partial match
+      qc.invalidateQueries({ queryKey: ["events"] });
       qc.invalidateQueries({ queryKey: ["faculty-events"] });
     },
   });
@@ -67,25 +67,30 @@ export const useDeleteEvent = () => {
 /* ================= STUDENT ================= */
 
 export const useRegisterEvent = () => {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
+
   return useMutation({
-    mutationFn: (eventId: string) =>
-      api.post(`/student/events/${eventId}/register`, {}),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["student-events"] });
-      qc.invalidateQueries({ queryKey: ["my-registrations"] });
+    mutationFn: async (eventId: string) => {
+      return api.post(`/student/events/${eventId}/register`);
+    },
+
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["student-events"] });
     },
   });
 };
 
 export const useCancelRegistration = () => {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
+
   return useMutation({
-    mutationFn: (eventId: string) =>
-      api.delete(`/student/events/${eventId}/register`),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["student-events"] });
-      qc.invalidateQueries({ queryKey: ["my-registrations"] });
+    mutationFn: async (eventId: string) => {
+      // ✅ FIXED ROUTE
+      return api.delete(`/student/events/${eventId}/cancel`);
+    },
+
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["student-events"] });
     },
   });
 };
@@ -107,7 +112,7 @@ export const useMarkNotificationRead = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
-      api.patch(`/notifications/${id}/read`), // ✅ FIXED
+      api.patch(`/notifications/${id}/read`),
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: ["notifications"] }),
   });

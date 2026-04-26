@@ -14,4 +14,5 @@ const permit = (...allowedRoles) => {
   };
 };
 
+
 export default permit;

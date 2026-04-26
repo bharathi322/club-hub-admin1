@@ -9,6 +9,7 @@ const clubSchema = new mongoose.Schema(
       enum: ["technical", "cultural", "sports", "arts", "social", "other"],
       default: "other",
     },
+    members: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     facultyIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     budgetAllocated: { type: Number, default: 0, min: 0 },
     budgetUsed: { type: Number, default: 0, min: 0 },
@@ -33,6 +34,11 @@ const clubSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+clubSchema.pre("save", function (next) {
+  this.membersCount = this.members.length;
+  next();
+});
+
 clubSchema.methods.toDashboardCard = function toDashboardCard() {
   return {
     _id: this._id,
@@ -46,6 +52,35 @@ clubSchema.methods.toDashboardCard = function toDashboardCard() {
     participationRate: this.participationRate,
     attendanceRate: this.attendanceRate,
   };
+};
+
+clubSchema.methods.calculateHealth = function () {
+  let score = 0;
+
+  // events
+  score += this.eventCount * 10;
+
+  // participation
+  score += this.participationRate * 0.3;
+
+  // attendance
+  score += this.attendanceRate * 0.2;
+
+  // budget usage efficiency
+  if (this.budgetAllocated > 0) {
+    const efficiency =
+      (this.budgetUsed / this.budgetAllocated) * 100;
+    score += efficiency * 0.2;
+  }
+
+  // proof submission
+  score += this.proofSubmissionRate * 0.3;
+
+  this.healthScore = Math.min(100, Math.round(score));
+
+  if (this.healthScore >= 70) this.healthStatus = "healthy";
+  else if (this.healthScore >= 40) this.healthStatus = "warning";
+  else this.healthStatus = "critical";
 };
 
 export default mongoose.model("Club", clubSchema);

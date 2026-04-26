@@ -11,7 +11,7 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { GraduationCap, Loader2 } from "lucide-react";
+import { GraduationCap, Loader2, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const Login = () => {
@@ -21,6 +21,7 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [studentId, setStudentId] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const { login, signup } = useAuth();
   const { toast } = useToast();
@@ -31,7 +32,6 @@ const Login = () => {
     setLoading(true);
 
     try {
-      // ================= SIGNUP =================
       if (isSignup) {
         await signup({
           name,
@@ -48,13 +48,9 @@ const Login = () => {
         });
 
         navigate("/verify-otp");
-      }
-
-      // ================= LOGIN =================
-      else {
+      } else {
         await login({ email, password });
 
-        // ✅ SAFE FIX: wait for localStorage to update
         await new Promise((res) => setTimeout(res, 50));
 
         const userData = JSON.parse(localStorage.getItem("user") || "{}");
@@ -105,7 +101,7 @@ const Login = () => {
 
         <CardContent className="space-y-4">
           <form onSubmit={handleSubmit} className="space-y-4">
-            
+
             {isSignup && (
               <div className="space-y-2">
                 <Label>Name</Label>
@@ -141,15 +137,28 @@ const Login = () => {
               </div>
             )}
 
+            {/* PASSWORD FIELD WITH EYE */}
             <div className="space-y-2">
               <Label>Password</Label>
-              <Input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
-                required
-              />
+
+              <div className="relative">
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  required
+                  className="pr-10"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
             <Button type="submit" className="w-full" disabled={loading}>

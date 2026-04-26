@@ -11,7 +11,7 @@ function safeUser(user) {
 
 router.post("/set-password", async (req, res) => {
   try {
-    const { token, password } = req.body;
+const { token, password, regNo } = req.body;
 
     const user = await User.findOne({
       resetToken: token,
@@ -22,7 +22,7 @@ router.post("/set-password", async (req, res) => {
       return res.status(400).json({ message: "Invalid or expired token" });
     }
 
-    user.password = password;
+user.regNo = regNo;
     user.resetToken = undefined;
     user.resetTokenExpiry = undefined;
     user.mustChangePassword = false;
@@ -30,6 +30,27 @@ router.post("/set-password", async (req, res) => {
     await user.save();
 
     res.json({ message: "Password updated" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+
+router.post("/reset-password", async (req, res) => {
+  try {
+    const { email, newPassword } = req.body;
+
+    const user = await User.findOne({ email });
+
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const bcrypt = require("bcrypt");
+    user.password = await bcrypt.hash(newPassword, 10);
+
+    await user.save();
+
+    res.json({ message: "Password updated" });
+
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -235,15 +256,18 @@ router.post("/forgot-password", async (req, res) => {
     user.resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000);
     await user.save();
 
+    
     const resetUrl = `${process.env.FRONTEND_URL || "http://localhost:8080"}/set-password/${resetToken}`;
-    await sendEmail({
-      to: user.email,
-      subject: "Reset your Club Hub password",
-      template: "forgot-password",
-      html: `<p>Hello ${user.name},</p><p>Reset your password here: <a href="${resetUrl}">${resetUrl}</a></p>`,
-      text: `Reset your password: ${resetUrl}`,
-      metadata: { userId: String(user._id), resetUrl },
-    });
+
+await sendEmail({
+  to: user.email,
+  subject: "Reset your Club Hub password",
+  template: "forgot-password",
+  html: `<p>Hello ${user.name},</p>
+         <p>Reset your password here: <a href="${resetUrl}">${resetUrl}</a></p>`,
+  text: `Reset your password: ${resetUrl}`,
+  metadata: { userId: String(user._id), resetUrl },
+});
 
     res.json({ message: "Password reset email sent" });
   } catch (error) {

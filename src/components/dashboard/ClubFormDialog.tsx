@@ -9,13 +9,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
 import type { Club } from "@/types/api";
 
@@ -34,25 +27,18 @@ const ClubFormDialog = ({
   onSubmit,
   isLoading,
 }: ClubFormDialogProps) => {
+
+  // ✅ ONLY REAL FIELDS
   const [name, setName] = useState("");
-  const [status, setStatus] = useState<string>("healthy");
-  const [membersCount, setMembersCount] = useState("");
-  const [rating, setRating] = useState("");
-  const [budgetAllocated, setBudgetAllocated] = useState(""); // ✅ NEW
+  const [budgetAllocated, setBudgetAllocated] = useState("");
 
   useEffect(() => {
     if (club) {
       setName(club.name);
-      setStatus(club.status);
-      setMembersCount(String(club.membersCount));
-      setRating(String(club.rating));
-      setBudgetAllocated(String(club.budgetAllocated || 0)); // ✅ NEW
+      setBudgetAllocated(String(club.budgetAllocated || 0));
     } else {
       setName("");
-      setStatus("healthy");
-      setMembersCount("");
-      setRating("");
-      setBudgetAllocated(""); // ✅ NEW
+      setBudgetAllocated("");
     }
   }, [club, open]);
 
@@ -62,10 +48,7 @@ const ClubFormDialog = ({
     onSubmit({
       ...(club ? { id: club._id } : {}),
       name,
-      status: status as Club["status"],
-      membersCount: Number(membersCount) || 0,
-      rating: Number(rating) || 0,
-      budgetAllocated: Number(budgetAllocated) || 0, // ✅ NEW
+      budgetAllocated: Number(budgetAllocated) || 0,
     });
   };
 
@@ -92,50 +75,7 @@ const ClubFormDialog = ({
             />
           </div>
 
-          {/* STATUS */}
-          <div className="space-y-2">
-            <Label>Status</Label>
-            <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="healthy">Healthy</SelectItem>
-                <SelectItem value="warning">Warning</SelectItem>
-                <SelectItem value="critical">Critical</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* MEMBERS + RATING */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="members">Members</Label>
-              <Input
-                id="members"
-                type="number"
-                value={membersCount}
-                onChange={(e) => setMembersCount(e.target.value)}
-                placeholder="0"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="rating">Rating</Label>
-              <Input
-                id="rating"
-                type="number"
-                step="0.1"
-                max="5"
-                min="0"
-                value={rating}
-                onChange={(e) => setRating(e.target.value)}
-                placeholder="0.0"
-              />
-            </div>
-          </div>
-
-          {/* ✅ NEW BUDGET FIELD */}
+          {/* BUDGET */}
           <div className="space-y-2">
             <Label htmlFor="budget">Budget Allocated</Label>
             <Input
@@ -146,6 +86,24 @@ const ClubFormDialog = ({
               placeholder="Enter budget"
             />
           </div>
+
+          {/* OPTIONAL READ-ONLY INFO (SAFE DISPLAY) */}
+          {club && (
+            <div className="grid grid-cols-3 gap-3 text-sm">
+              <div>
+                <Label>Status</Label>
+                <Input value={club.healthStatus} disabled />
+              </div>
+              <div>
+                <Label>Members</Label>
+                <Input value={club.membersCount} disabled />
+              </div>
+              <div>
+                <Label>Rating</Label>
+                <Input value={club.rating} disabled />
+              </div>
+            </div>
+          )}
 
           {/* FOOTER */}
           <DialogFooter>

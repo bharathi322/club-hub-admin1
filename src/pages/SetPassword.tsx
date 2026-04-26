@@ -6,7 +6,7 @@ import api from "../api/api";
 export default function SetPassword() {
   const { token } = useParams();
   const navigate = useNavigate();
-
+const [regNo, setRegNo] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [show, setShow] = useState(false);
@@ -35,9 +35,10 @@ export default function SetPassword() {
       setLoading(true);
 
       await api.post("/auth/set-password", {
-        token,
-        password,
-      });
+  token,
+  password,
+  regNo,
+});
 
       setSuccess("Password updated successfully");
 
@@ -84,7 +85,13 @@ export default function SetPassword() {
             onChange={(e) => setPassword(e.target.value)}
             className="w-full pl-10 pr-10 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
           />
-
+<input
+  type="text"
+  placeholder="Register Number"
+  value={regNo}
+  onChange={(e) => setRegNo(e.target.value.toUpperCase())}
+  className="border p-2 w-full"
+/>
           <button
             type="button"
             onClick={() => setShow(!show)}

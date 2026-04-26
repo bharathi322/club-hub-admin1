@@ -30,6 +30,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { CheckCircle, Users, CheckCheck, Download } from "lucide-react";
+          import api from "@/api/api";
+
 
 const FacultyAttendance = () => {
   const { data: events = [], isLoading: eventsLoading } = useFacultyEvents();
@@ -133,14 +135,14 @@ const FacultyAttendance = () => {
   const handleExportCSV = () => {
     if (!filtered.length) return;
 
-    const headers = ["Student", "Email", "Event", "Status"];
-
+const headers = ["Student", "Reg No", "Email", "Event", "Status"];
     const rows = filtered.map((r: any) => [
-      r?.student?.name ?? "—",
-      r?.student?.email ?? "—",
-      r?.event?.name ?? "—",
-      r?.status ?? "—",
-    ]);
+  r?.student?.name ?? "—",
+  r?.student?.regNo ?? "—",
+  r?.student?.email ?? "—",
+  r?.event?.name ?? "—",
+  r?.status ?? "—",
+]);
 
     const csv = [headers, ...rows]
       .map((row) =>
@@ -195,15 +197,55 @@ const FacultyAttendance = () => {
             </Button>
           )}
 
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={handleExportCSV}
-            disabled={!filtered.length}
-          >
-            <Download className="h-4 w-4" />
-            Export CSV
-          </Button>
+
+        <Button
+  variant="outline"
+  onClick={async () => {
+    try {
+      if (!selectedEvent || selectedEvent === "all") {
+        toast({
+          title: "Select event first",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const res = await api.get(
+        `/faculty/attendance/${selectedEvent}/pdf`,
+        {
+          responseType: "blob",
+        }
+      );
+
+      const file = new Blob([res.data], {
+        type: "application/pdf",
+      });
+
+      const url = window.URL.createObjectURL(file);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `attendance-${selectedEvent}.pdf`;
+
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      window.URL.revokeObjectURL(url);
+
+    } catch (err: any) {
+      console.error(err);
+
+      toast({
+        title: "Download failed",
+        description: err?.response?.data?.message || "Server error",
+        variant: "destructive",
+      });
+    }
+  }}
+>
+  Download Sheet
+</Button>
 
           <Select
             value={selectedEvent}
@@ -306,6 +348,7 @@ const FacultyAttendance = () => {
                       />
                     </TableHead>
                     <TableHead>Student</TableHead>
+                    <TableHead>Reg No</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Event</TableHead>
                     <TableHead>Status</TableHead>
@@ -335,12 +378,16 @@ const FacultyAttendance = () => {
                         </TableCell>
 
                         <TableCell>
-                          {reg?.student?.name ?? "—"}
-                        </TableCell>
+  {reg?.student?.name ?? "—"}
+</TableCell>
 
-                        <TableCell>
-                          {reg?.student?.email ?? "—"}
-                        </TableCell>
+<TableCell>
+  {reg?.student?.regNo ?? "—"}
+</TableCell>
+
+<TableCell>
+  {reg?.student?.email ?? "—"}
+</TableCell>
 
                         <TableCell>
                           {reg?.event?.name ?? "—"}

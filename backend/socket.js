@@ -12,13 +12,24 @@ export function initSocket(server) {
   });
 
   io.on("connection", (socket) => {
-    console.log("User connected:", socket.id);
+  console.log("User connected:", socket.id);
 
-    socket.on("disconnect", () => {
-      unregisterSocket(socket.id);
-      console.log("User disconnected:", socket.id);
-    });
+  socket.on("register", ({ userId, role }) => {
+    if (!userId) return;
+
+    registerSocketUser(userId, socket.id);
+
+    socket.join(userId);   // user room
+    socket.join(role);     // role room
+
+    console.log("Registered:", userId, role);
   });
+
+  socket.on("disconnect", () => {
+    unregisterSocket(socket.id);
+    console.log("User disconnected:", socket.id);
+  });
+});
 
   return io;
 }

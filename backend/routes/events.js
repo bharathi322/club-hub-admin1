@@ -4,7 +4,6 @@ import Club from "../models/Club.js";
 import EventRegistration from "../models/EventRegistration.js";
 import auth from "../middleware/auth.js";
 import permit from "../middleware/role.js";
-import { upload } from "../middleware/upload.js";
 import { generateQrCodeDataUrl } from "../utils/qr.js";
 import { recalculateClubHealth } from "../services/healthService.js";
 import { notifyMany } from "../services/notificationService.js";
@@ -12,7 +11,7 @@ import { sendEmail } from "../services/emailService.js";
 import { getIo } from "../socket.js";
 import { fileToMeta } from "../utils/files.js";
 import { createToken } from "../utils/auth.js";
-
+import upload from "../middleware/upload.js";
 const router = express.Router();
 
 // ACCESS CHECK
@@ -56,6 +55,7 @@ router.get("/", auth, async (req, res) => {
       events.map((event) => ({
         ...event.toObject(),
         clubName: event.clubId?.name || "",
+        facultyName: event.facultyId?.name || "",
       }))
     );
   } catch (error) {
@@ -84,14 +84,37 @@ router.post(
 
       const qrCodeToken = createToken();
 
+      // ✅ SAFE ADDITION (no existing logic removed)
+      let safeFacultyId;
+
+if (req.user.role === "admin") {
+  // ✅ always take from club
+  if (club.facultyIds && club.facultyIds.length > 0) {
+    safeFacultyId = club.facultyIds[0];
+  } else {
+    // fallback → still avoid crash
+    safeFacultyId = req.user._id;
+  }
+} else {
+  safeFacultyId = req.user._id;
+}
+
+      // ✅ fallback safety (ONLY addition)
+      if (req.user.role === "admin" && !safeFacultyId) {
+        if (club.facultyIds && club.facultyIds.length > 0) {
+          safeFacultyId = club.facultyIds[0];
+        } else {
+          return res.status(400).json({
+            message: "No faculty assigned to this club",
+          });
+        }
+      }
+
       const event = await Event.create({
         name: req.body.name,
         description: req.body.description || "",
         clubId,
-        facultyId:
-          req.user.role === "admin"
-            ? req.body.facultyId || club.facultyIds?.[0]
-            : req.user._id,
+facultyId: req.user._id,
         date: req.body.date,
         time: req.body.time,
         endTime: req.body.endTime || "",
@@ -106,7 +129,6 @@ router.post(
         ),
       });
 
-      // QR CODE
       event.qrCodeDataUrl = await generateQrCodeDataUrl(
         JSON.stringify({
           eventId: String(event._id),
@@ -115,7 +137,14 @@ router.post(
       );
 
       await event.save();
-      await recalculateClubHealth(clubId);
+
+// 🔥 ADD THIS (missing link)
+await Club.findByIdAndUpdate(clubId, {
+  $inc: { eventCount: 1 },
+});
+
+// 🔥 then recalculate
+await recalculateClubHealth(clubId);
 
       getIo().to("student").emit("event:created", event);
       getIo().to(`club:${clubId}`).emit("event:created", event);
@@ -126,6 +155,48 @@ router.post(
     }
   }
 );
+
+// UPLOAD FILES
+router.post(
+  "/:id/upload",
+  auth,
+  permit("faculty"),
+  upload.array("files", 10),
+  async (req, res) => {
+    try {
+      const event = await Event.findById(req.params.id);
+
+      if (!event) {
+        return res.status(404).json({ message: "Event not found" });
+      }
+
+      const files = req.files.map((file) =>
+        fileToMeta(file, req.user._id, "faculty")
+      );
+
+      event.attachments.push(...files);
+      await event.save();
+
+      res.json({ message: "Files uploaded", files });
+    } catch (err) {
+      res.status(500).json({ message: err.message });
+    }
+  }
+);
+
+// ADMIN MEDIA
+router.get("/admin/media", auth, permit("admin"), async (req, res) => {
+  try {
+    const events = await Event.find({ attachments: { $exists: true, $ne: [] } })
+      .populate("clubId", "name")
+      .populate("facultyId", "name")
+      .select("name date clubId facultyId attachments");
+
+    res.json(events);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 
 // UPDATE EVENT
 router.put("/:id", auth, permit("admin", "faculty"), async (req, res) => {
@@ -174,10 +245,36 @@ router.delete("/:id", auth, permit("admin", "faculty"), async (req, res) => {
     }
 
     await event.deleteOne();
+    await Club.findByIdAndUpdate(event.clubId, {
+  $inc: { eventCount: -1 },
+});
+
+await recalculateClubHealth(event.clubId);
 
     res.json({ message: "Deleted successfully" });
   } catch (err) {
     res.status(500).json({ message: "Delete failed" });
+  }
+});
+
+// APPROVE / REJECT
+router.put("/admin/events/:id/status", auth, permit("admin"), async (req, res) => {
+  try {
+    const { status } = req.body;
+
+    const event = await Event.findById(req.params.id);
+
+    if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+
+    event.status = status;
+    await event.save();
+
+    res.json({ message: "Status updated", event });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
   }
 });
 

@@ -13,7 +13,6 @@ import { sendEmail } from "../services/emailService.js";
 import { createNotification } from "../services/notificationService.js";
 import { recalculateClubHealth } from "../services/healthService.js";
 
-
 export const assignFaculty = async (req, res) => {
   try {
     const { id } = req.params;
@@ -24,7 +23,6 @@ export const assignFaculty = async (req, res) => {
     user.assignedClub = clubId;
     await user.save();
 
-    // ADD THIS
     await sendEmail(
       user.email,
       "Club Assignment",
@@ -37,10 +35,10 @@ export const assignFaculty = async (req, res) => {
     res.status(500).json({ message: "Error" });
   }
 };
+
 const router = express.Router();
 router.use(auth, permit("admin"));
 
-// EMAIL TEMPLATE
 function createFacultyEmail(username, tempPassword, clubName, resetUrl) {
   return {
     html: `<p>Welcome to Club Hub.</p>
@@ -51,7 +49,98 @@ function createFacultyEmail(username, tempPassword, clubName, resetUrl) {
   };
 }
 
-// CREATE CLUB
+router.put("/faculty/:id/assign", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { clubId } = req.body;
+
+    const faculty = await User.findById(id);
+    if (!faculty) {
+      return res.status(404).json({ message: "Faculty not found" });
+    }
+
+    await Club.updateMany(
+      { facultyIds: faculty._id },
+      { $pull: { facultyIds: faculty._id } }
+    );
+
+    faculty.assignedClubs = clubId ? [clubId] : [];
+    await faculty.save();
+
+    let clubName = "Unassigned";
+
+    if (clubId) {
+      const club = await Club.findByIdAndUpdate(
+        clubId,
+        { $addToSet: { facultyIds: faculty._id } },
+        { new: true }
+      );
+
+      clubName = club.name;
+    }
+
+    // 🔥 TOKEN LOGIC ADDED (no logic removed)
+    const resetToken = createToken();
+    faculty.resetToken = resetToken;
+    faculty.resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000);
+    await faculty.save();
+
+    const resetUrl = `http://localhost:8080/set-password/${resetToken}`;
+
+    console.log("Preparing email...");
+    await sendEmail({
+      to: faculty.email,
+      subject: "Club Assignment Updated",
+      text: `
+Hello ${faculty.name},
+
+You have been assigned to: ${clubName}
+
+Login credentials:
+Email: ${faculty.email}
+
+If you are a new user, please reset your password using the link below:
+${resetUrl}
+
+Regards,
+Club Management System
+`,
+    });
+
+    console.log("Email sent to:", faculty.email);
+
+    const io = req.app.get("io");
+    if (io) io.emit("clubUpdated");
+
+    res.json({ message: "Assignment updated" });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.put("/events/:id/status", async (req, res) => {
+  try {
+    const { status } = req.body;
+
+    const event = await Event.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true }
+    );
+
+    if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+
+    res.json({ message: "Status updated", event });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 router.post("/create-club", async (req, res) => {
   try {
     const club = await Club.create({
@@ -75,180 +164,57 @@ router.post("/create-club", async (req, res) => {
   }
 });
 
-// ASSIGN FACULTY (FIXED)
-router.post("/assign-faculty", async (req, res) => {
+router.post("/admin/assign-faculty", async (req, res) => {
   try {
     const { name, email, clubId } = req.body;
 
-    if (!clubId) {
-      return res.status(400).json({ message: "Club ID required" });
+    const existing = await User.findOne({ email });
+    if (existing) {
+      return res.status(400).json({ message: "Email exists" });
     }
 
-    const club = await Club.findById(clubId);
-    if (!club) {
-      return res.status(404).json({ message: "Club not found" });
-    }
+    const tempPassword = Math.random().toString(36).slice(-8);
+    const hashed = await bcrypt.hash(tempPassword, 10);
 
-    let faculty = await User.findOne({ email: email.toLowerCase() });
-    const tempPassword = randomPassword();
-
-    if (!faculty) {
-      faculty = await User.create({
-        name,
-        email: email.toLowerCase(),
-        password: tempPassword,
-        role: "faculty",
-        emailVerified: true,
-        mustChangePassword: true,
-        assignedClubs: [club._id],
-      });
-    } else {
-      faculty.name = name || faculty.name;
-      faculty.role = "faculty";
-      faculty.emailVerified = true;
-      faculty.mustChangePassword = true;
-      faculty.password = tempPassword;
-
-      // ✅ FIX: avoid crash
-      faculty.assignedClubs = [club._id];
-
-      await faculty.save();
-    }
-
-    // ✅ FIX: safe array handling
-    if (!club.facultyIds) {
-      club.facultyIds = [];
-    }
-
-    if (!club.facultyIds.some((id) => String(id) === String(faculty._id))) {
-      club.facultyIds.push(faculty._id);
-      await club.save();
-    }
-
-    // RESET TOKEN
-    const resetToken = createToken();
-    faculty.resetToken = resetToken;
-    faculty.resetTokenExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    await faculty.save();
-
-    const resetUrl = `${process.env.FRONTEND_URL || "http://localhost:8080"}/set-password/${resetToken}`;
-
-    const emailBody = createFacultyEmail(
-      faculty.email,
-      tempPassword,
-      club.name,
-      resetUrl
-    );
-
-    //await sendEmail({
-      //to: faculty.email,
-      //subject: `Club assigned`,
-      //html: emailBody.html,
-      //text: emailBody.text,
-    //});
-try {
-  await sendEmail({
-    to: faculty.email,
-    subject: "Club Assignment",
-    html: emailBody.html,
-    text: emailBody.text,
-  });
-} catch (err) {
-  console.log("EMAIL FAILED:", err.message);
-}
-    res.status(201).json({
-      message: "Faculty assigned",
-      faculty,
-      club,
+    const user = await User.create({
+      name,
+      email,
+      password: hashed,
+      role: "faculty",
+      assignedClubs: clubId ? [clubId] : [],
     });
 
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// UPDATE FACULTY ASSIGNMENT (REQUIRED FOR UI)
-router.put("/faculty/:id/assign", async (req, res) => {
-  try {
-    console.log("Assign API HIT");
-    console.log("Faculty ID:", req.params.id);
-    console.log("Club ID:", req.body.clubId);
-
-    const { clubId } = req.body;
-
-    const faculty = await User.findById(req.params.id);
-    if (!faculty) {
-      return res.status(404).json({ message: "Faculty not found" });
+    if (clubId) {
+      await Club.findByIdAndUpdate(clubId, {
+        $addToSet: { facultyIds: user._id },
+      });
     }
 
-    console.log("Faculty email:", faculty.email);
+    // 🔥 TOKEN LOGIC ADDED HERE ALSO
+    const resetToken = createToken();
+    user.resetToken = resetToken;
+    user.resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000);
+    await user.save();
 
-    const club = clubId ? await Club.findById(clubId) : null;
-    console.log("Club:", club?.name);
+    const resetUrl = `http://localhost:8080/set-password/${resetToken}`;
 
-    // assign
-    faculty.assignedClubs = clubId ? [clubId] : [];
+    await sendEmail({
+      to: email,
+      subject: "Faculty Account Created",
+      text: `
+Hello ${name}
 
-    // generate temp password
-    const tempPassword = randomPassword();
+Email: ${email}
+Password: ${tempPassword}
 
-    // ✅ FIX: hash password
-faculty.password = tempPassword;
+Reset here:
+${resetUrl}
+`,
+    });
 
-    faculty.mustChangePassword = true;
+    res.json({ message: "Faculty created" });
 
-    await faculty.save();
-
-    // SEND EMAIL
-    if (club && faculty.email) {
-      try {
-        console.log("Preparing email...");
-
-        const resetToken = createToken();
-
-        faculty.resetToken = resetToken;
-        faculty.resetTokenExpiry = new Date(
-          Date.now() + 7 * 24 * 60 * 60 * 1000
-        );
-        await faculty.save();
-
-        const resetUrl = `${
-          process.env.FRONTEND_URL || "http://localhost:8080"
-        }/set-password/${resetToken}`;
-
-        const emailBody = createFacultyEmail(
-          faculty.email,
-          tempPassword,
-          club.name,
-          resetUrl
-        );
-
-        console.log("Sending email to:", faculty.email);
-
-        await sendEmail({
-          to: faculty.email,
-          subject: "Club Assignment",
-          html: emailBody.html,
-          text: emailBody.text,
-        });
-
-        console.log("EMAIL SENT SUCCESS");
-      } catch (err) {
-        console.log("EMAIL FAILED FULL ERROR:", err);
-      }
-    } else {
-      console.log("Email skipped. Club or email missing.");
-    }
-
-    const updated = await User.findById(req.params.id).populate(
-      "assignedClubs",
-      "name"
-    );
-
-    res.json(updated);
   } catch (err) {
-    console.error("ASSIGN ERROR:", err);
     res.status(500).json({ message: err.message });
   }
 });
@@ -267,7 +233,6 @@ router.delete("/faculty/:id", async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
-// OTHER ROUTES (UNCHANGED)
 
 router.get("/clubs/:id/events", async (req, res) => {
   try {
@@ -297,7 +262,6 @@ router.post("/budget/allocate", async (req, res) => {
   }
 });
 
-// GET ALL FACULTY
 router.get("/faculty", async (req, res) => {
   try {
     const faculty = await User.find({ role: "faculty" })
@@ -308,6 +272,49 @@ router.get("/faculty", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to fetch faculty" });
+  }
+});
+
+router.put("/admin/faculty/:id/assign", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { clubId } = req.body;
+
+    const faculty = await User.findById(id);
+
+    if (!faculty) {
+      return res.status(404).json({ message: "Faculty not found" });
+    }
+
+    if (faculty.assignedClubs?.length > 0) {
+      const oldClubId = faculty.assignedClubs[0];
+
+      await Club.findByIdAndUpdate(oldClubId, {
+        $pull: { facultyIds: faculty._id },
+      });
+    }
+
+    faculty.assignedClubs = clubId ? [clubId] : [];
+    await faculty.save();
+
+    if (clubId) {
+      await Club.findByIdAndUpdate(clubId, {
+        $addToSet: { facultyIds: faculty._id },
+      });
+    }
+
+    const updatedClub = await Club.findById(clubId)
+      .populate("facultyIds", "name email");
+
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("clubUpdated");
+    }
+
+    res.json(updatedClub);
+
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 });
 
