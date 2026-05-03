@@ -4,17 +4,14 @@ import Club from "../models/Club.js";
 import EventRegistration from "../models/EventRegistration.js";
 import auth from "../middleware/auth.js";
 import permit from "../middleware/role.js";
-import { generateQrCodeDataUrl } from "../utils/qr.js";
 import { recalculateClubHealth } from "../services/healthService.js";
 import { notifyMany } from "../services/notificationService.js";
-import { sendEmail } from "../services/emailService.js";
 import { getIo } from "../socket.js";
 import { fileToMeta } from "../utils/files.js";
 import { createToken } from "../utils/auth.js";
 import upload from "../middleware/upload.js";
+
 const router = express.Router();
-import fs from "fs";
-import path from "path";
 
 // ACCESS CHECK
 async function ensureEventAccess(user, event) {
@@ -29,7 +26,7 @@ async function ensureEventAccess(user, event) {
   return false;
 }
 
-// GET EVENTS
+// ================= GET EVENTS =================
 router.get("/", auth, async (req, res) => {
   try {
     const query = {};
@@ -39,33 +36,43 @@ router.get("/", auth, async (req, res) => {
     }
 
     if (req.user.role === "student") {
-      query.status = { $in: ["approved", "postponed"] };
-    }
-
-    if (req.query.status) query.status = req.query.status;
-    if (req.query.clubId) query.clubId = req.query.clubId;
-    if (req.query.search) {
-      query.name = { $regex: req.query.search, $options: "i" };
-    }
+      console.log("ROLE:", req.user.role);
+console.log("QUERY:", query);
+query.status = { $regex: /^approved$/i };
+}
+    
 
     const events = await Event.find(query)
       .populate("clubId", "name healthStatus")
       .populate("facultyId", "name email")
       .sort({ date: 1, time: 1 });
 
-    res.json(
-      events.map((event) => ({
-        ...event.toObject(),
-        clubName: event.clubId?.name || "",
-        facultyName: event.facultyId?.name || "",
-      }))
-    );
+    const userId = req.user._id;
+
+const registrations = await EventRegistration.find({
+  studentId: userId,
+});
+
+const registrationMap = {};
+registrations.forEach((r) => {
+  registrationMap[r.eventId.toString()] = r.status;
+});
+
+res.json(
+  events.map((event) => ({
+    ...event.toObject(),
+    clubName: event.clubId?.name || "",
+    facultyName: event.facultyId?.name || "",
+    registrationStatus:
+      registrationMap[event._id.toString()] || "not_registered",
+  }))
+);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
 
-// CREATE EVENT
+// ================= CREATE EVENT =================
 router.post(
   "/",
   auth,
@@ -86,70 +93,92 @@ router.post(
 
       const qrCodeToken = createToken();
 
-      // ✅ SAFE ADDITION (no existing logic removed)
-      let safeFacultyId;
+      // convert form-data → nested object (no logic change)
+      if (!req.body.resourcePerson) {
+        req.body.resourcePerson = {
+          name: req.body["resourcePerson[name]"],
+          organization: req.body["resourcePerson[organization]"],
+        };
 
-if (req.user.role === "admin") {
-  // ✅ always take from club
-  if (club.facultyIds && club.facultyIds.length > 0) {
-    safeFacultyId = club.facultyIds[0];
-  } else {
-    // fallback → still avoid crash
-    safeFacultyId = req.user._id;
-  }
-} else {
-  safeFacultyId = req.user._id;
-}
+        req.body.facultyParticipants = {
+          internal: req.body["facultyParticipants[internal]"],
+          external: req.body["facultyParticipants[external]"],
+        };
 
-      // ✅ fallback safety (ONLY addition)
-      if (req.user.role === "admin" && !safeFacultyId) {
-        if (club.facultyIds && club.facultyIds.length > 0) {
-          safeFacultyId = club.facultyIds[0];
-        } else {
-          return res.status(400).json({
-            message: "No faculty assigned to this club",
-          });
-        }
+        req.body.studentParticipants = {
+          internal: req.body["studentParticipants[internal]"],
+          external: req.body["studentParticipants[external]"],
+        };
       }
 
       const event = await Event.create({
         name: req.body.name,
         description: req.body.description || "",
         clubId,
-facultyId: req.user._id,
+        facultyId: req.user._id,
+
         date: req.body.date,
         time: req.body.time,
         endTime: req.body.endTime || "",
         location: req.body.location || "",
+
+        type: req.body.type || "",
+        department: req.body.department || "",
+        venue: req.body.venue || "",
+
+        resourcePerson: {
+          name: req.body.resourcePerson?.name || "",
+          organization: req.body.resourcePerson?.organization || "",
+        },
+
+        topicsCovered: req.body.topicsCovered || "",
+
+        facultyParticipants: {
+          internal: Number(req.body.facultyParticipants?.internal || 0),
+          external: Number(req.body.facultyParticipants?.external || 0),
+        },
+
+        studentParticipants: {
+          internal: Number(req.body.studentParticipants?.internal || 0),
+          external: Number(req.body.studentParticipants?.external || 0),
+        },
+
+        facultyCoordinator: req.body.facultyCoordinator || "",
+        studentCoordinator: req.body.studentCoordinator || "",
+
+        agenda: req.body.agenda || "",
+        summary: req.body.summary || "",
+
+        certificatesPrinted: req.body.certificatesPrinted === "true",
+        feedbackCollected: req.body.feedbackCollected === "true",
+        attendanceAttached: req.body.attendanceAttached === "true",
+
         maxCapacity: Number(req.body.maxCapacity || 100),
         planned: req.body.planned !== "false",
         budgetRequested: Number(req.body.budgetRequested || 0),
-        status: req.user.role === "admin" ? "approved" : "pending",
+        budgetSpent: Number(req.body.budgetSpent || 0),
+
+status: (req.user.role === "admin" ? "approved" : "pending").toLowerCase(),
         qrCodeToken,
-        attachments: (req.files || []).map((file) =>
-          fileToMeta(file, req.user._id, "faculty")
-        ),
+
+        attachments: (req.files || []).map((file, index) => {
+          let label = "file";
+
+          if (req.body.brochureLabel && index === req.files.length - 1) {
+            label = "brochure";
+          }
+
+          return {
+            ...fileToMeta(file, req.user._id, "faculty"),
+            label,
+          };
+        }),
       });
 
-      event.qrCodeDataUrl = await generateQrCodeDataUrl(
-        JSON.stringify({
-          eventId: String(event._id),
-          token: qrCodeToken,
-        })
-      );
+      await Club.findByIdAndUpdate(clubId, { $inc: { eventCount: 1 } });
+      await recalculateClubHealth(clubId);
 
-      await event.save();
-
-// 🔥 ADD THIS (missing link)
-await Club.findByIdAndUpdate(clubId, {
-  $inc: { eventCount: 1 },
-});
-
-// 🔥 then recalculate
-await recalculateClubHealth(clubId);
-
-      getIo().to("student").emit("event:created", event);
-      getIo().to(`club:${clubId}`).emit("event:created", event);
+      getIo().emit("event:created", event);
 
       res.status(201).json(event);
     } catch (error) {
@@ -158,227 +187,200 @@ await recalculateClubHealth(clubId);
   }
 );
 
-// UPLOAD FILES
-router.post(
-  "/:id/upload",
+// ================= UPDATE EVENT =================
+router.put(
+  "/:id",
   auth,
-  permit("faculty"),
-  upload.array("files", 10),
+  permit("admin", "faculty"),
+  upload.array("attachments", 10), // ✅ IMPORTANT
   async (req, res) => {
     try {
       const event = await Event.findById(req.params.id);
 
-      if (!event) {
+if (!event || !(await ensureEventAccess(req.user, event))) {
+  return res.status(404).json({ message: "Event not found" });
+}
+
+// 🔥 FREEZE EDIT AFTER APPROVAL
+if (event.status === "approved" && req.user.role !== "admin") {
+  return res.status(403).json({
+    message: "Approved events cannot be edited",
+  });
+}
+
+
+
+      if (!event || !(await ensureEventAccess(req.user, event))) {
         return res.status(404).json({ message: "Event not found" });
       }
 
-      const files = req.files.map((file) =>
-        fileToMeta(file, req.user._id, "faculty")
-      );
+      const oldStatus = event.status;
 
-      event.attachments.push(...files);
+      // ✅ UPDATE FIELDS MANUALLY (SAFE)
+      event.name = req.body.name || event.name;
+      event.type = req.body.type || "";
+      event.department = req.body.department || "";
+      event.venue = req.body.venue || "";
+
+      event.date = req.body.date || event.date;
+      event.time = req.body.time || event.time;
+
+      event.topicsCovered = req.body.topicsCovered || "";
+
+      event.resourcePerson = {
+        name: req.body["resourcePerson[name]"] || "",
+        organization: req.body["resourcePerson[organization]"] || "",
+      };
+
+      event.facultyParticipants = {
+        internal: Number(req.body["facultyParticipants[internal]"] || 0),
+        external: Number(req.body["facultyParticipants[external]"] || 0),
+      };
+
+      event.studentParticipants = {
+        internal: Number(req.body["studentParticipants[internal]"] || 0),
+        external: Number(req.body["studentParticipants[external]"] || 0),
+      };
+
+      event.facultyCoordinator = req.body.facultyCoordinator || "";
+      event.studentCoordinator = req.body.studentCoordinator || "";
+
+      event.agenda = req.body.agenda || "";
+      event.summary = req.body.summary || "";
+
+      event.budgetSpent = Number(req.body.budgetSpent || 0);
+
+      event.certificatesPrinted = req.body.certificatesPrinted === "true";
+      event.feedbackCollected = req.body.feedbackCollected === "true";
+      event.attendanceAttached = req.body.attendanceAttached === "true";
+
+      // ✅ FILES (OPTIONAL)
+      if (req.files && req.files.length > 0) {
+        const newFiles = req.files.map((file) =>
+          fileToMeta(file, req.user._id, "faculty")
+        );
+        event.attachments.push(...newFiles);
+      }
+
       await event.save();
 
-      res.json({ message: "Files uploaded", files });
-    } catch (err) {
-      res.status(500).json({ message: err.message });
+      // existing logic stays
+      if (oldStatus !== event.status) {
+        const registrations = await EventRegistration.find({
+          eventId: event._id,
+          status: { $ne: "cancelled" },
+        }).populate("studentId", "email name");
+
+        const studentIds = registrations.map((r) => r.studentId._id);
+
+        await notifyMany(studentIds, {
+          title: "Event status updated",
+          message: `${event.name} is now ${event.status}`,
+        });
+      }
+
+      await recalculateClubHealth(event.clubId);
+
+      getIo().emit("event:updated", event);
+
+      res.json(event);
+    } catch (error) {
+      res.status(500).json({ message: error.message });
     }
   }
 );
 
-// ADMIN MEDIA
-router.get("/admin/media", auth, permit("admin"), async (req, res) => {
+// ================= DELETE =================
+router.delete("/:id", auth, permit("admin", "faculty"), async (req, res) => {
   try {
-    const events = await Event.find({
-      attachments: { $exists: true, $ne: [] },
-    })
+    const event = await Event.findById(req.params.id);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+
+    await event.deleteOne();
+    await Club.findByIdAndUpdate(event.clubId, { $inc: { eventCount: -1 } });
+
+    await recalculateClubHealth(event.clubId);
+
+    getIo().emit("eventDeleted", req.params.id);
+
+    res.json({ message: "Deleted successfully" });
+  } catch {
+    res.status(500).json({ message: "Delete failed" });
+  }
+});
+
+// ================= GET SINGLE EVENT =================
+router.get("/:id", async (req, res) => {
+  try {
+    const event = await Event.findById(req.params.id)
       .populate("clubId", "name")
-      .populate("facultyId", "name")
-      .select("name date clubId facultyId attachments");
+      .populate("facultyId", "name email");
 
-    // ✅ REMOVE deleted files
-    const cleaned = events.map((event) => {
-      const obj = event.toObject();
+    if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
 
-      obj.attachments = obj.attachments.filter(
-        (file) => !file.isDeleted
-      );
-
-      return obj;
-    });
-
-    res.json(cleaned);
+    res.json(event);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// UPDATE EVENT
-router.put("/:id", auth, permit("admin", "faculty"), async (req, res) => {
+// ================= REGISTER EVENT =================
+router.post("/:id/register", auth, async (req, res) => {
   try {
-    const event = await Event.findById(req.params.id);
+    const eventId = req.params.id;
+    const userId = req.user._id;
 
-    if (!event || !(await ensureEventAccess(req.user, event))) {
-      return res.status(404).json({ message: "Event not found" });
-    }
+    // check already registered
+    const existing = await EventRegistration.findOne({
+      eventId,
+      studentId: userId,
+    });
 
-    const oldStatus = event.status;
-    Object.assign(event, req.body);
-    await event.save();
-
-    if (oldStatus !== event.status) {
-      const registrations = await EventRegistration.find({
-        eventId: event._id,
-        status: { $ne: "cancelled" },
-      }).populate("studentId", "email name");
-
-      const studentIds = registrations.map((r) => r.studentId._id);
-
-      await notifyMany(studentIds, {
-        title: "Event status updated",
-        message: `${event.name} is now ${event.status}`,
+    if (existing) {
+      return res.status(400).json({
+        message: "Already registered",
       });
     }
 
-    await recalculateClubHealth(event.clubId);
+    // create registration
+    await EventRegistration.create({
+      eventId,
+      studentId: userId,
+      status: "registered",
+    });
 
-    getIo().to(`club:${event.clubId}`).emit("event:updated", event);
+    // 🔥 UPDATE COUNT (THIS WAS MISSING)
+    await Event.findByIdAndUpdate(eventId, {
+      $inc: { registeredCount: 1 },
+    });
 
-    res.json(event);
+    // 🔥 REALTIME UPDATE
+    getIo().emit("event:updated");
+
+    res.json({ message: "Registered successfully" });
+
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
 
-// DELETE EVENT
-router.delete("/:id", auth, permit("admin", "faculty"), async (req, res) => {
-  try {
-    const event = await Event.findById(req.params.id);
+router.get("/club/:id/stats", async (req, res) => {
+  const clubId = req.params.id;
 
-    if (!event) {
-      return res.status(404).json({ message: "Event not found" });
-    }
+  const members = await User.countDocuments({ clubId });
 
-    await event.deleteOne();
-    await Club.findByIdAndUpdate(event.clubId, {
-  $inc: { eventCount: -1 },
+  const feedbacks = await Feedback.find({ clubId });
+
+  const rating =
+    feedbacks.reduce((a, b) => a + b.rating, 0) /
+    (feedbacks.length || 1);
+
+  res.json({
+    members,
+    rating: Number(rating.toFixed(1)),
+  });
 });
 
-await recalculateClubHealth(event.clubId);
-
-    res.json({ message: "Deleted successfully" });
-  } catch (err) {
-    res.status(500).json({ message: "Delete failed" });
-  }
-});
-
-// APPROVE / REJECT
-router.put("/admin/events/:id/status", auth, permit("admin"), async (req, res) => {
-  try {
-    const { status } = req.body;
-
-    const event = await Event.findById(req.params.id);
-
-    if (!event) {
-      return res.status(404).json({ message: "Event not found" });
-    }
-
-    event.status = status;
-    await event.save();
-
-    res.json({ message: "Status updated", event });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
-  }
-});
-router.delete("/:eventId/file/:fileId", auth, async (req, res) => {
-  try {
-    const { eventId, fileId } = req.params;
-    const user = req.user;
-
-    const event = await Event.findById(eventId);
-
-    if (!event) {
-      return res.status(404).json({ message: "Event not found" });
-    }
-
-    // permission
-    if (user.role !== "admin") {
-      if (
-        user.role !== "faculty" ||
-        String(event.facultyId) !== String(user._id)
-      ) {
-        return res.status(403).json({ message: "Not allowed" });
-      }
-    }
-
-    const file = event.attachments.id(fileId);
-
-    if (!file) {
-      return res.status(404).json({ message: "File not found" });
-    }
-
-    // ✅ SOFT DELETE
-    file.isDeleted = true;
-    file.deletedAt = new Date();
-    file.deletedBy = user._id;
-
-    await event.save();
-
-    res.json({ message: "File moved to trash" });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Delete failed" });
-  }
-});
-
-router.get("/admin/trash", auth, permit("admin"), async (req, res) => {
-  try {
-    const events = await Event.find({
-      "attachments.isDeleted": true,
-    })
-      .populate("clubId", "name")
-      .populate("facultyId", "name")
-      .select("name date clubId facultyId attachments");
-
-    const trashed = events.map((event) => {
-      const obj = event.toObject();
-
-      obj.attachments = obj.attachments.filter(
-        (f) => f.isDeleted
-      );
-
-      return obj;
-    });
-
-    res.json(trashed);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-router.put("/:eventId/file/:fileId/restore", auth, permit("admin"), async (req, res) => {
-  try {
-    const { eventId, fileId } = req.params;
-
-    const event = await Event.findById(eventId);
-    const file = event.attachments.id(fileId);
-
-    if (!file) {
-      return res.status(404).json({ message: "File not found" });
-    }
-
-    file.isDeleted = false;
-    file.deletedAt = null;
-    file.deletedBy = null;
-
-    await event.save();
-
-    res.json({ message: "File restored" });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
 export default router;

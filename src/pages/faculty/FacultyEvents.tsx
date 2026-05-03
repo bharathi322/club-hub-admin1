@@ -43,22 +43,26 @@ const FacultyEvents = () => {
   // ✅ REAL-TIME SOCKET FIX (IMPORTANT)
   useEffect(() => {
     // CREATE
-    socket.on("eventCreated", (newEvent) => {
-      queryClient.setQueryData(["faculty-events"], (old: any) => {
-        if (!old) return [newEvent];
-        return [newEvent, ...old];
-      });
-    });
+   socket.on("event:created", (newEvent) => {
+  queryClient.setQueryData(["faculty-events"], (old: any) => {
+    if (!old) return [newEvent];
 
-    // UPDATE
-    socket.on("eventUpdated", (updatedEvent) => {
-      queryClient.setQueryData(["faculty-events"], (old: any) => {
-        if (!old) return [];
-        return old.map((e: any) =>
-          e._id === updatedEvent._id ? updatedEvent : e
-        );
-      });
-    });
+    const exists = old.some((e: any) => e._id === newEvent._id);
+    if (exists) return old; // ✅ PREVENT DUPLICATE
+
+    return [newEvent, ...old];
+  });
+});
+
+socket.on("event:updated", (updatedEvent) => {
+  queryClient.setQueryData(["faculty-events"], (old: any) => {
+    if (!old) return [updatedEvent];
+
+    return old.map((e: any) =>
+      e._id === updatedEvent._id ? updatedEvent : e
+    );
+  });
+});
 
     // DELETE
     socket.on("eventDeleted", (id) => {
@@ -69,10 +73,10 @@ const FacultyEvents = () => {
     });
 
     return () => {
-      socket.off("eventCreated");
-      socket.off("eventUpdated");
-      socket.off("eventDeleted");
-    };
+  socket.off("event:created");
+  socket.off("event:updated");
+  socket.off("eventDeleted");
+};
   }, [queryClient]);
 
   const handleSubmit = (data: Partial<Event> & { id?: string }) => {
@@ -167,6 +171,9 @@ const FacultyEvents = () => {
                   >
                     {event.status}
                   </Badge>
+                  {event.status === "approved" && (
+  <p className="text-xs text-red-500 mt-1">Locked</p>
+)}
                 </CardHeader>
 
                 <CardContent className="space-y-3">
@@ -182,17 +189,19 @@ const FacultyEvents = () => {
 
                   <div className="flex gap-2 pt-1">
                     <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex-1 gap-1"
-                      onClick={() => {
-                        setEditingEvent(event);
-                        setFormOpen(true);
-                      }}
-                    >
-                      <Pencil className="h-3 w-3" />
-                      Edit
-                    </Button>
+  size="sm"
+  variant="outline"
+  className="flex-1 gap-1"
+  disabled={event.status === "approved"}
+  onClick={() => {
+    if (event.status === "approved") return;
+    setEditingEvent(event);
+    setFormOpen(true);
+  }}
+>
+  <Pencil className="h-3 w-3" />
+  Edit
+</Button>
 
                     <Button
                       size="sm"

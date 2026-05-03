@@ -2,13 +2,14 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 
 // create JWT token
-export const signToken = (userId) => {
+export const signToken = (user) => {
 
-  // DEBUG
-  console.log("SIGN SECRET:", process.env.JWT_SECRET);
 
   return jwt.sign(
-    { id: userId },
+    {
+      id: user._id,
+      role: user.role   // ✅ CRITICAL FIX
+    },
     process.env.JWT_SECRET,
     { expiresIn: "1d" }
   );

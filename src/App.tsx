@@ -29,6 +29,7 @@ import Index from "./pages/Index";
 import Clubs from "./pages/Clubs";
 import Events from "./pages/Events";
 import Reports from "./pages/Reports";
+import TrashPage from "@/pages/TrashPage";
 
 // Student
 import StudentEvents from "./pages/student/StudentEvents";
@@ -152,6 +153,19 @@ const App = () => (
                   </ProtectedRoute>
                 }
               />
+
+<Route
+  path="/admin/trash"
+  element={
+    <ProtectedRoute>
+      <RoleRoute allowedRoles={["admin"]}>
+        <DashboardLayout>
+          <TrashPage />
+        </DashboardLayout>
+      </RoleRoute>
+    </ProtectedRoute>
+  }
+/>
 
               <Route
                 path="/admin/clubs"

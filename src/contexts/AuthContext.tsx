@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 import api from "@/api/api";
 import { socket } from "@/lib/socket";
 import { checkTokenExpiry } from "@/utils/auth";
+  import { connectSocket } from "@/lib/socket";
 
 interface User {
   _id: string;
@@ -72,20 +73,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    if (user && user._id) {
-      if (!socket.connected) socket.connect();
 
-      socket.emit("register", {
-        userId: user._id,
-        role: user.role,
-      });
-    }
-
-    return () => {
-      socket.off("connect");
-    };
-  }, [user]);
+useEffect(() => {
+  if (user && user._id) {
+    connectSocket(user._id, user.role);
+  }
+}, [user]);
 
   const login = async (credentials: { email: string; password: string }) => {
     const res = await api.post("/auth/login", credentials);

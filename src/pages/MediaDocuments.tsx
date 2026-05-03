@@ -23,14 +23,27 @@ const MediaDocuments = () => {
     }
   };
 
-  const handleDelete = async (fileId: string, eventId: string) => {
-    try {
-      await api.delete(`/events/${eventId}/file/${fileId}`);
-      fetchMedia(); // refresh
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  const handleDelete = async (eventId: string, fileId: string) => {
+  if (!window.confirm("Move to trash?")) return;
+
+  try {
+await api.delete(`/events/${eventId}/file/${fileId}`);
+    // ✅ remove from UI immediately
+    setData((prev: any[]) =>
+      prev.map((event) => ({
+        ...event,
+        attachments: event.attachments.filter(
+          (f: any) => f._id !== fileId
+        ),
+      }))
+    );
+
+  } catch (err) {
+    console.error("Delete failed", err);
+  }
+};
+
+  
 
   const getIcon = (name: string) => {
     if (!name) return "📄";
@@ -48,14 +61,18 @@ const MediaDocuments = () => {
     return n.endsWith(".png") || n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".pdf");
   };
 
-  const filteredData = data
-    .map((event: any) => {
-      const files = event.attachments?.filter((f: any) =>
+ const filteredData = data
+  .map((event: any) => {
+    const files = event.attachments
+      ?.filter((f: any) => !f.isDeleted) // IMPORTANT
+      ?.filter((f: any) =>
         f.originalName.toLowerCase().includes(search.toLowerCase())
       );
-      return { ...event, attachments: files };
-    })
-    .filter((e: any) => e.attachments.length > 0);
+
+    return { ...event, attachments: files };
+  })
+  .filter((e: any) => e.attachments.length > 0);
+
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
@@ -102,6 +119,33 @@ const MediaDocuments = () => {
                 {event.attachments.length} files
               </span>
             </div>
+            {/* 🔥 BROCHURE SECTION */}
+{event.attachments.some((f: any) => f.label === "brochure") && (
+  <div className="mb-3 p-3 border rounded bg-blue-50">
+
+    <p className="text-sm font-semibold text-blue-600 mb-2">
+      Brochure
+    </p>
+
+    {event.attachments
+      .filter((f: any) => f.label === "brochure")
+      .map((file: any) => (
+        <div key={file._id} className="flex justify-between items-center">
+
+          <span className="text-sm">{file.originalName}</span>
+
+          <a
+            href={`http://localhost:5000${file.url}`}
+            target="_blank"
+            className="text-blue-500 underline text-sm"
+          >
+            View
+          </a>
+
+        </div>
+      ))}
+  </div>
+)}
 
             {/* FILES */}
             <div className="space-y-2">
@@ -110,12 +154,28 @@ const MediaDocuments = () => {
                   key={file._id}
                   className="flex items-center justify-between border rounded px-4 py-2"
                 >
-                  <div className="flex items-center gap-3 w-[60%]">
-                    <span>{getIcon(file.originalName)}</span>
-                    <span className="truncate text-sm">
-                      {file.originalName}
-                    </span>
-                  </div>
+                <div className="flex flex-col gap-1 w-[60%]">
+
+  <div className="flex items-center gap-3">
+    <span>{getIcon(file.originalName)}</span>
+
+    <span className="truncate text-sm">
+      {file.originalName}
+    </span>
+
+    {/* 🔥 ADD THIS */}
+    {file.label === "brochure" && (
+      <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded">
+        Brochure
+      </span>
+    )}
+  </div>
+
+  <span className="text-xs text-gray-400">
+    Uploaded: {new Date(file.uploadedAt).toLocaleDateString()}
+  </span>
+
+</div>
 
                   <div className="flex items-center gap-3 text-sm">
 
@@ -143,14 +203,14 @@ const MediaDocuments = () => {
 
                     {/* DELETE */}
                     <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() =>
-                        handleDelete(file._id, event._id)
-                      }
-                    >
-                      Delete
-                    </Button>
+  size="sm"
+  variant="destructive"
+  onClick={() =>
+    handleDelete(event._id, file._id)
+  }
+>
+  Delete
+</Button>
                   </div>
                 </div>
               ))}

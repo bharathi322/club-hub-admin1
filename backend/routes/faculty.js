@@ -35,10 +35,22 @@ router.use(auth, permit("faculty"), checkFacultyClub);
 
 router.get("/my-club", async (req, res) => {
   try {
-    const club = await Club.findById(req.assignedClubIds[0]).populate("facultyIds", "name email");
-    res.json(club);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+    const club = await Club.findById(req.assignedClubIds[0]);
+
+    const feedbacks = await Feedback.find({ clubId: club._id });
+
+    const avgRating =
+      feedbacks.reduce((sum, f) => sum + (f.rating || 0), 0) /
+      (feedbacks.length || 1);
+
+    res.json({
+      ...club.toObject(),
+      membersCount: club.members?.length || 0,
+      rating: Number(avgRating.toFixed(1)),
+      feedbackCount: feedbacks.length,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 });
 

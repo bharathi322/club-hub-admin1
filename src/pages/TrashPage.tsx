@@ -1,95 +1,118 @@
-import { useEffect, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/api/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Trash2, RotateCcw } from "lucide-react";
 
 const TrashPage = () => {
-  const [data, setData] = useState([]);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    fetchTrash();
-  }, []);
-
-  const fetchTrash = async () => {
-    try {
+  const { data = [], isLoading } = useQuery({
+    queryKey: ["trash"],
+    queryFn: async () => {
       const res = await api.get("/events/admin/trash");
-      setData(res.data);
-    } catch (err) {
-      console.error(err);
-    }
-  };
+      return res.data;
+    },
+  });
 
-  const handleRestore = async (eventId: string, fileId: string) => {
-    try {
-      await api.put(`/events/${eventId}/file/${fileId}/restore`);
-      fetchTrash();
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  const restoreMutation = useMutation({
+    mutationFn: ({ eventId, fileId }: any) =>
+      api.put(`/events/${eventId}/file/${fileId}/restore`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["trash"] });
+      queryClient.invalidateQueries({ queryKey: ["media"] });
+    },
+  });
 
-  const handlePermanentDelete = async (eventId: string, fileId: string) => {
-    try {
-      await api.delete(`/events/${eventId}/file/${fileId}/permanent`);
-      fetchTrash();
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  const deleteMutation = useMutation({
+    mutationFn: ({ eventId, fileId }: any) =>
+      api.delete(`/events/${eventId}/file/${fileId}/permanent`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["trash"] });
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <div className="p-6 text-sm text-muted-foreground">
+        Loading deleted files...
+      </div>
+    );
+  }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
-      <h1 className="text-2xl font-semibold">Trash</h1>
+    <div className="p-6 space-y-6">
+      {/* HEADER */}
+      <div>
+        <h1 className="text-2xl font-semibold">Trash</h1>
+        <p className="text-sm text-muted-foreground">
+          Deleted files are stored here. You can restore or delete permanently.
+        </p>
+      </div>
 
+      {/* EMPTY STATE */}
       {data.length === 0 && (
-        <p className="text-muted-foreground">No deleted files</p>
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <Trash2 className="h-10 w-10 text-muted-foreground mb-3" />
+          <p className="text-lg font-medium">No deleted files</p>
+          <p className="text-sm text-muted-foreground">
+            Files you delete will appear here
+          </p>
+        </div>
       )}
 
-      {data.map((event: any) => (
-        <Card key={event._id}>
-          <CardContent className="p-4 space-y-3">
-
-            <div>
-              <h2 className="font-semibold">{event.name}</h2>
-              <p className="text-sm text-muted-foreground">
-                {event.clubId?.name} • {event.date}
-              </p>
-            </div>
-
-            {event.attachments.map((file: any) => (
-              <div
-                key={file._id}
-                className="flex justify-between items-center border rounded px-3 py-2"
-              >
-                <span className="text-sm">{file.originalName}</span>
-
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      handleRestore(event._id, file._id)
-                    }
-                  >
-                    Restore
-                  </Button>
-
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() =>
-                      handlePermanentDelete(event._id, file._id)
-                    }
-                  >
-                    Delete Forever
-                  </Button>
-                </div>
+      {/* LIST */}
+      <div className="space-y-4">
+        {data.map((item: any) => (
+          <Card key={item.file._id} className="shadow-sm border">
+            <CardContent className="flex items-center justify-between p-4">
+              {/* LEFT */}
+              <div className="flex flex-col">
+                <p className="font-medium text-sm">
+                  {item.file.originalName || item.file.fileName}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {item.eventName}
+                </p>
               </div>
-            ))}
 
-          </CardContent>
-        </Card>
-      ))}
+              {/* ACTIONS */}
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1"
+                  onClick={() =>
+                    restoreMutation.mutate({
+                      eventId: item.eventId,
+                      fileId: item.file._id,
+                    })
+                  }
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Restore
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="gap-1"
+                  onClick={() => {
+                    if (!confirm("Delete permanently?")) return;
+                    deleteMutation.mutate({
+                      eventId: item.eventId,
+                      fileId: item.file._id,
+                    });
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
   );
 };

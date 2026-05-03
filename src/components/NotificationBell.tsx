@@ -1,138 +1,55 @@
-import { useState } from "react";
-import { Bell } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
-import { useNotifications } from "@/hooks/use-dashboard-api";
-import { useMarkNotificationRead, useMarkAllNotificationsRead } from "@/hooks/use-mutations";
-import { formatDistanceToNow } from "date-fns";
-import type { AppNotification } from "@/types/api";
+import { useEffect, useState } from "react";
 import { socket } from "@/lib/socket";
-import { useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { Bell } from "lucide-react";
 
+const NotificationBell = () => {
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [open, setOpen] = useState(false);
 
-const typeColors: Record<string, string> = {
-  info: "bg-primary",
-  warning: "bg-destructive",
-  success: "bg-chart-2",
-};
-
-export default function NotificationBell() {
-  const { data: notifications = [] } = useNotifications();
-  const markRead = useMarkNotificationRead();
-  const markAllRead = useMarkAllNotificationsRead();
-
-  const unreadCount = notifications.filter((n: AppNotification) => !n.read).length;
-
-  const handleMarkRead = (id: string) => {
-    markRead.mutate(id);
-  };
-
-  const handleMarkAllRead = () => {
-    markAllRead.mutate();
-  };
-
-  const formatTime = (dateStr: string) => {
-    try {
-      return formatDistanceToNow(new Date(dateStr), { addSuffix: true });
-    } catch {
-      return dateStr;
-    }
-  };
-const queryClient = useQueryClient();
-useEffect(() => {
-  // SINGLE NOTIFICATION UPDATED
-  socket.on("notificationUpdated", (updatedNotification) => {
-    queryClient.setQueryData(["notifications"], (old: any) => {
-      if (!old) return [];
-      return old.map((n: any) =>
-        n._id === updatedNotification._id ? updatedNotification : n
-      );
+  useEffect(() => {
+    socket.on("notification:new", (data) => {
+      setNotifications((prev) => [data, ...prev]);
     });
-  });
 
-  // ALL CLEARED
-  socket.on("notificationsCleared", ({ userId }) => {
-    queryClient.setQueryData(["notifications"], (old: any) => {
-      if (!old) return [];
-      return old.map((n: any) => ({
-        ...n,
-        read: true,
-      }));
-    });
-  });
-
-  return () => {
-    socket.off("notificationUpdated");
-    socket.off("notificationsCleared");
-  };
-}, []);
+    return () => {
+      socket.off("notification:new");
+    };
+  }, []);
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative h-8 w-8">
-          <Bell className="h-4 w-4" />
-          {unreadCount > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
-              {unreadCount}
-            </span>
-          )}
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80 max-h-96 overflow-y-auto">
-        <DropdownMenuLabel className="flex items-center justify-between">
-          <span>Notifications</span>
-          {unreadCount > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-auto p-0 text-xs text-muted-foreground hover:text-foreground"
-              onClick={handleMarkAllRead}
-            >
-              Mark all read
-            </Button>
-          )}
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {notifications.length === 0 ? (
-          <div className="py-6 text-center text-sm text-muted-foreground">
-            No notifications
-          </div>
-        ) : (
-          notifications.map((n: AppNotification) => (
-            <DropdownMenuItem
-              key={n._id}
-              className={cn(
-                "flex items-start gap-3 p-3 cursor-pointer",
-                !n.read && "bg-accent/50"
-              )}
-              onClick={() => !n.read && handleMarkRead(n._id)}
-            >
-              <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", typeColors[n.type])} />
-              <div className="min-w-0 flex-1 space-y-0.5">
-                <p className="text-sm font-medium leading-tight">{n.title}</p>
-                <p className="text-xs text-muted-foreground truncate">{n.description}</p>
-                <p className="text-[11px] text-muted-foreground/70">{formatTime(n.createdAt)}</p>
-              </div>
-              {!n.read && (
-                <Badge variant="secondary" className="shrink-0 text-[10px] h-5">
-                  New
-                </Badge>
-              )}
-            </DropdownMenuItem>
-          ))
+    <div className="relative">
+      {/* ICON */}
+      <button onClick={() => setOpen(!open)} className="relative">
+        <Bell className="w-5 h-5" />
+
+        {notifications.length > 0 && (
+          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs px-1 rounded">
+            {notifications.length}
+          </span>
         )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </button>
+
+      {/* DROPDOWN */}
+      {open && (
+        <div className="absolute right-0 mt-2 w-72 bg-white border rounded shadow-lg z-50">
+          <div className="p-2 font-semibold border-b">Notifications</div>
+
+          {notifications.length === 0 ? (
+            <p className="p-3 text-sm text-gray-500">
+              No notifications
+            </p>
+          ) : (
+            notifications.map((n, i) => (
+              <div key={i} className="p-3 border-b text-sm">
+                <p className="font-medium">{n.title}</p>
+                <p className="text-gray-500">{n.message}</p>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
   );
-}
+};
+
+export default NotificationBell;

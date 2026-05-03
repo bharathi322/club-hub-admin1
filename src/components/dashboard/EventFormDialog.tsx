@@ -10,13 +10,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
 import { useClubs } from "@/hooks/use-dashboard-api";
 import { useAuth } from "@/contexts/AuthContext";
@@ -36,25 +29,31 @@ const EventFormDialog = ({
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [budgetSpent, setBudgetSpent] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
 
-  // ✅ ADDED (no existing logic changed)
+  const [type, setType] = useState("");
+  const [department, setDepartment] = useState("");
+  const [venue, setVenue] = useState("");
+
+  const [rpName, setRpName] = useState("");
+  const [rpOrg, setRpOrg] = useState("");
+
+  const [topics, setTopics] = useState("");
+
+  const [facInt, setFacInt] = useState(0);
+  const [facExt, setFacExt] = useState(0);
+  const [stuInt, setStuInt] = useState(0);
+  const [stuExt, setStuExt] = useState(0);
+
+  const [facCoord, setFacCoord] = useState("");
+  const [stuCoord, setStuCoord] = useState("");
+
+  const [agenda, setAgenda] = useState("");
+  const [summary, setSummary] = useState("");
+
+  const [brochure, setBrochure] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [facultyId, setFacultyId] = useState("");
 
-  // ✅ Convert to AM/PM
-  const formatTime = (time: string) => {
-    if (!time) return "";
-
-    const [hour, minute] = time.split(":");
-    let h = parseInt(hour);
-    const ampm = h >= 12 ? "PM" : "AM";
-
-    h = h % 12 || 12;
-
-    return `${h}:${minute} ${ampm}`;
-  };
-
-  // ✅ Edit mode
   useEffect(() => {
     if (event) {
       setName(event.name || "");
@@ -62,6 +61,27 @@ const EventFormDialog = ({
       setDate(event.date ? event.date.split("T")[0] : "");
       setTime(event.time || "");
       setBudgetSpent(String(event.budgetSpent || 0));
+
+      setType(event.type || "");
+      setDepartment(event.department || "");
+      setVenue(event.venue || "");
+
+      setRpName(event.resourcePerson?.name || "");
+      setRpOrg(event.resourcePerson?.organization || "");
+
+      setTopics(event.topicsCovered || "");
+
+      setFacInt(event.facultyParticipants?.internal || 0);
+      setFacExt(event.facultyParticipants?.external || 0);
+
+      setStuInt(event.studentParticipants?.internal || 0);
+      setStuExt(event.studentParticipants?.external || 0);
+
+      setFacCoord(event.facultyCoordinator || "");
+      setStuCoord(event.studentCoordinator || "");
+
+      setAgenda(event.agenda || "");
+      setSummary(event.summary || "");
     } else {
       setName("");
       setClub("");
@@ -72,152 +92,121 @@ const EventFormDialog = ({
     }
   }, [event, open]);
 
-  // ✅ Faculty auto club (existing)
   useEffect(() => {
     if (user?.role === "faculty" && user?.assignedClubs?.length > 0) {
       setClub(user.assignedClubs[0]);
     }
   }, [user]);
 
-  // ✅ NEW: Auto assign faculty when club changes
   useEffect(() => {
     if (!club || !clubs) return;
-
     const selectedClub = clubs.find(
       (c: any) => String(c._id) === String(club)
     );
-
     if (selectedClub?.facultyIds?.length > 0) {
       setFacultyId(selectedClub.facultyIds[0]);
     }
   }, [club, clubs]);
 
-  // ✅ Submit
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
     const formData = new FormData();
+
     formData.append("name", name);
+    formData.append("type", type);
+    formData.append("department", department);
+    formData.append("venue", venue);
+
+    formData.append("topicsCovered", topics);
+    formData.append("facultyCoordinator", facCoord);
+    formData.append("studentCoordinator", stuCoord);
+
+    formData.append("agenda", agenda);
+    formData.append("summary", summary);
+
+    formData.append("resourcePerson[name]", rpName);
+    formData.append("resourcePerson[organization]", rpOrg);
+
+    formData.append("facultyParticipants[internal]", String(facInt));
+    formData.append("facultyParticipants[external]", String(facExt));
+
+    formData.append("studentParticipants[internal]", String(stuInt));
+    formData.append("studentParticipants[external]", String(stuExt));
+
     formData.append("clubId", club);
     formData.append("date", date);
     formData.append("time", time);
     formData.append("budgetSpent", String(Number(budgetSpent) || 0));
 
-    // ✅ NEW: send facultyId
-    if (facultyId) {
-      formData.append("facultyId", facultyId);
-    }
+    if (facultyId) formData.append("facultyId", facultyId);
 
     files.forEach((file) => {
       formData.append("attachments", file);
     });
 
-    onSubmit(formData);
+    if (brochure) {
+      formData.append("attachments", brochure);
+      formData.append("brochureLabel", "brochure");
+    }
+
+    if (event?._id) {
+  onSubmit(formData, event._id);
+} else {
+  onSubmit(formData);
+}
+
+// ❌ REMOVE manual close
+
+    // ✅ FIX: CLOSE DIALOG
+    onOpenChange(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+    <Dialog
+      open={open}
+      onOpenChange={(val) => {
+        if (!val) onOpenChange(false);
+      }}
+    >
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {event ? "Edit Event" : "Add New Event"}
           </DialogTitle>
           <DialogDescription>
-            Fill the details to {event ? "update" : "create"} an event.
+            Fill details to {event ? "update" : "create"} event
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
 
-          {/* Event Name */}
           <div>
             <Label>Event Name</Label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
+            <Input value={name} onChange={(e) => setName(e.target.value)} required />
           </div>
 
-          {/* Club */}
-          {user?.role === "admin" ? (
-            <div>
-              <Label>Club</Label>
-              <Select value={club} onValueChange={setClub}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select club" />
-                </SelectTrigger>
-                <SelectContent>
-                  {clubs?.map((c: any) => (
-                    <SelectItem key={c._id} value={c._id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          ) : (
-            <div>
-              <Label>Club</Label>
-              <Input
-                value={
-                  clubs?.find((c: any) => String(c._id) === String(club))?.name || ""
-                }
-                disabled
-              />
-            </div>
-          )}
-
-          {/* Date & Time */}
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              required
-            />
-
-            <div>
-              <Input
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                required
-              />
-
-              {time && (
-                <p className="text-sm text-gray-500 mt-1">
-                  Selected: {formatTime(time)}
-                </p>
-              )}
-            </div>
+          <div>
+            <Label>Date</Label>
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
 
-          {/* Budget */}
-          <Input
-            type="number"
-            value={budgetSpent}
-            onChange={(e) => setBudgetSpent(e.target.value)}
-            placeholder="Budget"
-          />
+          <div>
+            <Label>Time</Label>
+            <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+          </div>
 
-          {/* Upload */}
-          {event && event.status === "completed" && (
-            <Input
-              type="file"
-              multiple
-              onChange={(e) =>
-                setFiles(Array.from(e.target.files || []))
-              }
-            />
-          )}
+          <div>
+            <Label>Budget Spent</Label>
+            <Input value={budgetSpent} onChange={(e) => setBudgetSpent(e.target.value)} />
+          </div>
 
-          {/* Buttons */}
+          <div>
+            <Label>Upload Brochure</Label>
+            <Input type="file" onChange={(e) => setBrochure(e.target.files?.[0] || null)} />
+          </div>
+
           <DialogFooter>
-            <Button type="button" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-
             <Button type="submit" disabled={isLoading}>
               {isLoading && <Loader2 className="animate-spin mr-2" />}
               {event ? "Update" : "Create"}

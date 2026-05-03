@@ -31,6 +31,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
+import { Trash2 } from "lucide-react";
 
 
 const adminNav = [
@@ -39,6 +40,7 @@ const adminNav = [
   { title: "Events", url: "/admin/events", icon: CalendarDays },
   { title: "Faculty", url: "/admin/faculty-assignment", icon: GraduationCap }, // ✅ FIXED
   { title: "Reports", url: "/admin/reports", icon: FileText },
+    { title: "Trash", url: "/admin/trash", icon: Trash2 },
   { title: "Settings", url: "/admin/settings", icon: Settings },
 ];
 

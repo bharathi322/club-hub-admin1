@@ -74,7 +74,7 @@ router.post("/login", async (req, res) => {
     }
 
     return res.json({
-      token: signToken(user._id),
+      token: signToken(user),
       user: safeUser(user),
     });
   } catch (error) {
@@ -235,7 +235,7 @@ router.post("/verify-otp", async (req, res) => {
 
     res.json({
       message: "Email verified successfully",
-      token: signToken(user._id),
+      token: signToken(user),
       user: safeUser(user),
     });
   } catch (error) {
@@ -269,7 +269,7 @@ router.post("/change-password", async (req, res) => {
 
     res.json({
       message: "Password changed successfully",
-      token: signToken(user._id),
+      token: signToken(user),
       user: safeUser(user),
     });
   } catch (error) {

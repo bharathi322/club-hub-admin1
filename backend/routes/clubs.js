@@ -4,6 +4,7 @@ import auth from "../middleware/auth.js";
 import permit from "../middleware/role.js";
 import { recalculateClubHealth } from "../services/healthService.js";
 import { getIo } from "../socket.js";
+import Feedback from "../models/Feedback.js";
 
 const router = express.Router();
 
@@ -24,10 +25,18 @@ router.get("/", auth, async (req, res) => {
         .populate("facultyIds", "name email")
         .populate("members", "_id");
 
-      updated.push({
-        ...freshClub.toObject(),
-        membersCount: freshClub.members.length,
-      });
+      // 🔥 CALCULATE RATING
+const feedbacks = await Feedback.find({ clubId: freshClub._id });
+
+const rating =
+  feedbacks.reduce((sum, f) => sum + (f.rating || 0), 0) /
+  (feedbacks.length || 1);
+
+updated.push({
+  ...freshClub.toObject(),
+  membersCount: freshClub.members.length,
+  rating: Number(rating.toFixed(1)),
+});
     }
 
     res.json(updated);
@@ -57,10 +66,17 @@ router.post("/:id/join", auth, async (req, res) => {
       .populate("facultyIds", "name")
       .populate("members", "_id");
 
-    const finalClub = {
-      ...updatedClub.toObject(),
-      membersCount: updatedClub.members.length,
-    };
+    const feedbacks = await Feedback.find({ clubId: updatedClub._id });
+
+const rating =
+  feedbacks.reduce((sum, f) => sum + (f.rating || 0), 0) /
+  (feedbacks.length || 1);
+
+const finalClub = {
+  ...updatedClub.toObject(),
+  membersCount: updatedClub.members.length,
+  rating: Number(rating.toFixed(1)),
+};
 
     // 🔥 REAL-TIME UPDATE
     getIo().emit("clubUpdated", finalClub);
@@ -116,19 +132,24 @@ router.get("/:id", auth, async (req, res) => {
         .json({ message: "Cannot access another club" });
     }
 
-    // 🔥 RECALCULATE BEFORE RETURN
     await recalculateClubHealth(req.params.id);
 
-    const club = await Club.findById(req.params.id).populate(
-      "facultyIds",
-      "name email"
-    );
+    const club = await Club.findById(req.params.id)
+      .populate("facultyIds", "name email")
+      .populate("members", "_id");
 
-    if (!club) {
-      return res.status(404).json({ message: "Club not found" });
-    }
+    const feedbacks = await Feedback.find({ clubId: club._id });
 
-    res.json(club);
+    const rating =
+      feedbacks.reduce((sum, f) => sum + (f.rating || 0), 0) /
+      (feedbacks.length || 1);
+
+    res.json({
+      ...club.toObject(),
+      membersCount: club.members.length,
+      rating: Number(rating.toFixed(1)),
+    });
+
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

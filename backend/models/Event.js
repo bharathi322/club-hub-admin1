@@ -10,14 +10,18 @@ const attachmentSchema = new mongoose.Schema(
     url: { type: String, default: "" },
     uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     uploadedAt: { type: Date, default: Date.now },
+
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
   },
   { _id: true }
 );
 
 const eventSchema = new mongoose.Schema(
   {
+    // ===== EXISTING =====
     name: { type: String, required: true, trim: true },
-
     description: { type: String, default: "" },
 
     clubId: {
@@ -47,13 +51,9 @@ const eventSchema = new mongoose.Schema(
     location: { type: String, default: "" },
 
     maxCapacity: { type: Number, default: 100, min: 1 },
-
     registeredCount: { type: Number, default: 0, min: 0 },
-
     attendanceCount: { type: Number, default: 0, min: 0 },
-
     attendanceRate: { type: Number, default: 0, min: 0, max: 100 },
-
     averageRating: { type: Number, default: 0, min: 0, max: 5 },
 
     planned: { type: Boolean, default: true },
@@ -86,12 +86,37 @@ const eventSchema = new mongoose.Schema(
     attendanceWindowStart: { type: Date, default: null },
     attendanceWindowEnd: { type: Date, default: null },
 
-    // ✅ KEEP ONLY THIS
     attachments: [attachmentSchema],
+
+    // ===== NEW (REPORT FIELDS) =====
+
+    type: { type: String, default: "" }, // FDP / Workshop
+    department: { type: String, default: "" },
+    venue: { type: String, default: "" },
+
+    resourcePerson: {
+  name: { type: String, default: "" },
+  organization: { type: String, default: "" },
+},
+
+facultyParticipants: {
+  internal: { type: Number, default: 0 },
+  external: { type: Number, default: 0 },
+},
+
+studentParticipants: {
+  internal: { type: Number, default: 0 },
+  external: { type: Number, default: 0 },
+},
+
+certificatesPrinted: { type: Boolean, default: false },
+feedbackCollected: { type: Boolean, default: false },
+attendanceAttached: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
 
+// ===== EXISTING VIRTUAL =====
 eventSchema.virtual("seatsRemaining").get(function () {
   return Math.max(this.maxCapacity - this.registeredCount, 0);
 });
