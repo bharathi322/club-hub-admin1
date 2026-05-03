@@ -43,12 +43,16 @@ export const useFacultyBudget = () =>
     ...baseConfig,
   });
 
-export const useBudget = () =>
-  useQuery({
-    queryKey: ["budget"],
-    queryFn: () => fetchData("/dashboard/budget"),
-    ...baseConfig,
+export const useBudget = () => {
+  return useQuery({
+    queryKey: ["media-stats"],
+    queryFn: async () => {
+      const res = await api.get("/dashboard/media-stats");
+      console.log("MEDIA API:", res.data); // DEBUG
+      return res.data;
+    },
   });
+};
 
 export const useMonthlyEvents = () =>
   useQuery({

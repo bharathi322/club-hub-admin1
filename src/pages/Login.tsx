@@ -34,11 +34,11 @@ const Login = () => {
     try {
       if (isSignup) {
         await signup({
-          name,
-          email,
-          password,
-          studentId,
-        });
+name,
+email,
+password,
+registerNumber: studentId,
+});
 
         localStorage.setItem("otpEmail", email);
 

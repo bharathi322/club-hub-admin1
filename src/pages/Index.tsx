@@ -9,6 +9,8 @@ import ComplaintsFeed from "@/components/dashboard/ComplaintsFeed";
 import MediaBudget from "@/components/dashboard/MediaBudget";
 import DayFlowCalendar from "@/components/dashboard/DayFlowCalendar";
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
+
 import FacultyBudget from "@/components/dashboard/FacultyBudget";
 const Index = () => {
   return (

@@ -114,11 +114,35 @@ router.get("/calendar/:date", auth, async (req, res) => {
 
 router.get("/media-stats", auth, permit("admin"), async (_req, res) => {
   try {
-    const proofs = await ProofSubmission.find();
-    res.json({
-      totalPhotos: proofs.reduce((sum, proof) => sum + proof.studentUploads.length + proof.facultyUploads.length, 0),
-      pendingReports: proofs.filter((proof) => proof.status === "submitted").length,
+    const events = await Event.find().sort({ createdAt: -1 });
+
+    let totalFiles = 0;
+    let recentFiles = [];
+
+    events.forEach((event) => {
+      if (!event.attachments) return;
+
+      totalFiles += event.attachments.length;
+
+      event.attachments.forEach((file) => {
+        recentFiles.push({
+          name: file.originalName,
+          url: file.url,
+          uploadedAt: file.uploadedAt,
+        });
+      });
     });
+
+    // sort latest first + limit 5
+    recentFiles = recentFiles
+      .sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt))
+      .slice(0, 5);
+
+    res.json({
+      totalFiles,
+      recentFiles,
+    });
+
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

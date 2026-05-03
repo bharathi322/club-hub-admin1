@@ -1,16 +1,15 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Image, FileText, IndianRupee } from "lucide-react";
 import { useBudget } from "@/hooks/use-dashboard-api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
+import { FileText, IndianRupee } from "lucide-react";
 
 const MediaBudget = () => {
   const { data, isLoading } = useBudget();
-  const navigate = useNavigate(); // ✅ FIXED
+  const navigate = useNavigate();
 
-  // ✅ Safe calculations
   const budgetPercent =
     data && data.budgetTotal
       ? Math.round((data.budgetUsed / data.budgetTotal) * 100)
@@ -25,7 +24,7 @@ const MediaBudget = () => {
 
   return (
     <div className="space-y-4">
-      
+
       {/* MEDIA SECTION */}
       <Card className="shadow-card">
         <CardHeader className="pb-3">
@@ -34,46 +33,33 @@ const MediaBudget = () => {
           </CardTitle>
         </CardHeader>
 
-        <CardContent className="space-y-3">
-          
-          {/* Photos */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Image className="h-4 w-4" />
-              <span className="text-sm">Photos Uploaded</span>
-            </div>
+        <CardContent className="space-y-4">
 
-            {isLoading ? (
-              <Skeleton className="h-5 w-10" />
-            ) : (
-              <span className="text-sm font-bold text-card-foreground">
-                {data?.photosUploaded ?? "--"}
-              </span>
-            )}
-          </div>
-
-          {/* Reports */}
+          {/* Files Uploaded */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-muted-foreground">
               <FileText className="h-4 w-4" />
-              <span className="text-sm">Reports Pending</span>
+              <span className="text-sm">Files Uploaded</span>
             </div>
 
             {isLoading ? (
               <Skeleton className="h-5 w-10" />
             ) : (
-              <span className="text-sm font-bold text-card-foreground">
-                {data?.reportsPending ?? "--"}
+              <span className="text-lg font-semibold">
+                {data?.totalFiles ?? "--"}
               </span>
             )}
           </div>
 
-          {/* ✅ FIXED BUTTON */}
+          {/* Description */}
+          <p className="text-xs text-muted-foreground">
+            Access all uploaded media and documents in one place
+          </p>
+
+          {/* Button */}
           <Button
-            variant="outline"
-            size="sm"
-            className="w-full mt-2 gap-2"
-            onClick={() => navigate("/admin/media")} // ✅ FIXED PATH
+            className="w-full"
+            onClick={() => navigate("/admin/media")}
           >
             View All Media & Documents
           </Button>
@@ -95,13 +81,12 @@ const MediaBudget = () => {
             <Skeleton className="h-20 w-full rounded-lg" />
           ) : (
             <>
-              {/* Progress Bar */}
+              {/* Progress */}
               <Progress value={budgetPercent} className="h-2.5" />
 
               {/* Values */}
               <div className="flex justify-between text-sm">
-                
-                {/* Used */}
+
                 <div>
                   <p className="text-muted-foreground">Budget Used</p>
                   <p className="font-bold text-card-foreground">
@@ -112,7 +97,6 @@ const MediaBudget = () => {
                   </p>
                 </div>
 
-                {/* Remaining */}
                 <div className="text-right">
                   <p className="text-muted-foreground">Remaining</p>
                   <p className="font-bold text-status-healthy">
@@ -128,6 +112,7 @@ const MediaBudget = () => {
           )}
         </CardContent>
       </Card>
+
     </div>
   );
 };

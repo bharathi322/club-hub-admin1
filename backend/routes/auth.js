@@ -83,100 +83,138 @@ router.post("/login", async (req, res) => {
 });
 
 router.post("/register", async (req, res) => {
-  try {
-    const { name, email, password, studentId, department, year } = req.body;
-    if (!name || !email || !password || !studentId) {
-      return res.status(400).json({ message: "Missing required registration fields" });
-    }
+try {
+const { name, email, password, department, year } = req.body;
 
-    const existing = await User.findOne({
-      $or: [{ email: email.toLowerCase() }, { studentId }],
-    });
-    if (existing) {
-      return res.status(400).json({ message: "An account already exists for this email or student ID" });
-    }
+// support both fields
+let registerNumber = req.body.registerNumber || req.body.studentId;
 
-    const otp = randomNumericCode(6);
-    const user = await User.create({
-      name,
-      email: email.toLowerCase(),
-      password,
-      studentId,
-      department: department || "",
-      year: year || "",
-      role: "student",
-      otp,
-      otpExpiry: new Date(Date.now() + 10 * 60 * 1000),
-      onboardingSource: "student_signup",
-      isApproved: true,
-      emailVerified: false,
-    });
+if (!name || !email || !password || !registerNumber) {
+  return res.status(400).json({ message: "Missing required registration fields" });
+}
 
-    await sendEmail({
-      to: user.email,
-      subject: "Verify your Club Hub account",
-      template: "student-register-otp",
-      html: `<p>Hello ${user.name},</p><p>Your OTP is <strong>${otp}</strong>. It expires in 10 minutes.</p>`,
-      text: `Your Club Hub OTP is ${otp}.`,
-      metadata: { userId: String(user._id) },
-    });
+registerNumber = registerNumber.trim().toUpperCase();
 
-    res.status(201).json({
-      message: "OTP sent to email",
-      email: user.email,
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+const existing = await User.findOne({
+  $or: [
+    { email: email.toLowerCase() },
+    { studentId: registerNumber },      // old support
+    { registerNumber: registerNumber }, // new support
+  ],
+});
+
+if (existing) {
+  return res.status(400).json({ message: "An account already exists for this email or register number" });
+}
+
+const otp = randomNumericCode(6);
+
+const user = await User.create({
+  name,
+  email: email.toLowerCase(),
+  password,
+
+  // FIX HERE
+  regNo: registerNumber,
+  studentId: registerNumber, // keep for old logic
+
+  department: department || "",
+  year: year || "",
+  role: "student",
+  otp,
+  otpExpiry: new Date(Date.now() + 10 * 60 * 1000),
+  onboardingSource: "student_signup",
+  isApproved: true,
+  emailVerified: false,
+});
+
+await sendEmail({
+  to: user.email,
+  subject: "Verify your Club Hub account",
+  template: "student-register-otp",
+  html: `<p>Hello ${user.name},</p><p>Your OTP is <strong>${otp}</strong>. It expires in 10 minutes.</p>`,
+  text: `Your Club Hub OTP is ${otp}.`,
+  metadata: { userId: String(user._id) },
+});
+
+res.status(201).json({
+  message: "OTP sent to email",
+  email: user.email,
+});
+
+} catch (error) {
+console.error("ERROR:", error);
+res.status(500).json({ message: error.message });
+}
 });
 
 router.post("/signup", async (req, res) => {
-  try {
-    const { name, email, password, studentId, department, year } = req.body;
-    if (!name || !email || !password || !studentId) {
-      return res.status(400).json({ message: "Missing required registration fields" });
-    }
+try {
+    console.log("BODY:", req.body);   // ✅ HERE
 
-    const existing = await User.findOne({
-      $or: [{ email: email.toLowerCase() }, { studentId }],
-    });
-    if (existing) {
-      return res.status(400).json({ message: "An account already exists for this email or student ID" });
-    }
 
-    const otp = randomNumericCode(6);
-    const user = await User.create({
-      name,
-      email: email.toLowerCase(),
-      password,
-      studentId,
-      department: department || "",
-      year: year || "",
-      role: "student",
-      otp,
-      otpExpiry: new Date(Date.now() + 10 * 60 * 1000),
-      onboardingSource: "student_signup",
-      isApproved: true,
-      emailVerified: false,
-    });
+const { name, email, password, department, year } = req.body;
 
-    await sendEmail({
-      to: user.email,
-      subject: "Verify your Club Hub account",
-      template: "student-register-otp",
-      html: `<p>Hello ${user.name},</p><p>Your OTP is <strong>${otp}</strong>. It expires in 10 minutes.</p>`,
-      text: `Your Club Hub OTP is ${otp}.`,
-      metadata: { userId: String(user._id) },
-    });
+let registerNumber = req.body.registerNumber || req.body.studentId;
 
-    res.status(201).json({
-      message: "OTP sent to email",
-      email: user.email,
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+if (!name || !email || !password || !registerNumber) {
+  return res.status(400).json({ message: "Missing required registration fields" });
+}
+
+registerNumber = registerNumber.trim().toUpperCase();
+
+const existing = await User.findOne({
+  $or: [
+    { email: email.toLowerCase() },
+    { studentId: registerNumber },
+    { registerNumber: registerNumber },
+  ],
 });
+
+if (existing) {
+  return res.status(400).json({ message: "An account already exists for this email or register number" });
+}
+
+const otp = randomNumericCode(6);
+
+const user = await User.create({
+  name,
+  email: email.toLowerCase(),
+  password,
+
+  regNo: registerNumber,
+studentId: registerNumber,
+
+  department: department || "",
+  year: year || "",
+  role: "student",
+  otp,
+  otpExpiry: new Date(Date.now() + 10 * 60 * 1000),
+  onboardingSource: "student_signup",
+  isApproved: true,
+  emailVerified: false,
+});
+
+await sendEmail({
+  to: user.email,
+  subject: "Verify your Club Hub account",
+  template: "student-register-otp",
+  html: `<p>Hello ${user.name},</p><p>Your OTP is <strong>${otp}</strong>. It expires in 10 minutes.</p>`,
+  text: `Your Club Hub OTP is ${otp}.`,
+  metadata: { userId: String(user._id) },
+});
+
+res.status(201).json({
+  message: "OTP sent to email",
+  email: user.email,
+});
+
+} catch (error) {
+res.status(500).json({ message: error.message });
+}
+});
+
+
 
 router.post("/verify-otp", async (req, res) => {
   try {

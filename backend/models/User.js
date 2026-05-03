@@ -122,8 +122,7 @@ userSchema.pre("validate", function (next) {
       return next(new Error("Register number required"));
     }
 
-    const pattern = /^U\d{2}[A-Z]{2}\d{6}$/;
-
+const pattern = /^[UP]\d{2}[A-Z]{2}\d{2}[A-Z]\d{6}$/;
     if (!pattern.test(this.regNo)) {
       return next(new Error("Invalid register number format"));
     }

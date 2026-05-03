@@ -30,6 +30,7 @@ const proofSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    
   },
   { timestamps: true }
 );

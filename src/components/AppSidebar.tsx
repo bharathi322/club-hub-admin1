@@ -32,6 +32,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
 
+
 const adminNav = [
   { title: "Dashboard", url: "/admin", icon: LayoutDashboard },
   { title: "Clubs", url: "/admin/clubs", icon: Users },

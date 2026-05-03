@@ -101,10 +101,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signup = async (data: any) => {
-    const res = await api.post("/auth/signup", data);
-    localStorage.setItem("token", res.data.token);
-    return res.data;
+  const payload = {
+    ...data,
+
+    // support both old and new field
+    registerNumber: data.registerNumber || data.studentId,
   };
+
+  // remove old field before sending
+  delete payload.studentId;
+
+  const res = await api.post("/auth/signup", payload);
+
+  // keep your existing logic
+  localStorage.setItem("token", res.data.token);
+
+  return res.data;
+};
 
   const verifyOtp = async (email: string, otp: string) => {
     const res = await api.post("/auth/verify-otp", { email, otp });

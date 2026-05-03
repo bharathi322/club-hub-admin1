@@ -13,6 +13,8 @@ import { fileToMeta } from "../utils/files.js";
 import { createToken } from "../utils/auth.js";
 import upload from "../middleware/upload.js";
 const router = express.Router();
+import fs from "fs";
+import path from "path";
 
 // ACCESS CHECK
 async function ensureEventAccess(user, event) {
@@ -187,12 +189,25 @@ router.post(
 // ADMIN MEDIA
 router.get("/admin/media", auth, permit("admin"), async (req, res) => {
   try {
-    const events = await Event.find({ attachments: { $exists: true, $ne: [] } })
+    const events = await Event.find({
+      attachments: { $exists: true, $ne: [] },
+    })
       .populate("clubId", "name")
       .populate("facultyId", "name")
       .select("name date clubId facultyId attachments");
 
-    res.json(events);
+    // ✅ REMOVE deleted files
+    const cleaned = events.map((event) => {
+      const obj = event.toObject();
+
+      obj.attachments = obj.attachments.filter(
+        (file) => !file.isDeleted
+      );
+
+      return obj;
+    });
+
+    res.json(cleaned);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -277,5 +292,93 @@ router.put("/admin/events/:id/status", auth, permit("admin"), async (req, res) =
     res.status(500).json({ message: "Server error" });
   }
 });
+router.delete("/:eventId/file/:fileId", auth, async (req, res) => {
+  try {
+    const { eventId, fileId } = req.params;
+    const user = req.user;
 
+    const event = await Event.findById(eventId);
+
+    if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+
+    // permission
+    if (user.role !== "admin") {
+      if (
+        user.role !== "faculty" ||
+        String(event.facultyId) !== String(user._id)
+      ) {
+        return res.status(403).json({ message: "Not allowed" });
+      }
+    }
+
+    const file = event.attachments.id(fileId);
+
+    if (!file) {
+      return res.status(404).json({ message: "File not found" });
+    }
+
+    // ✅ SOFT DELETE
+    file.isDeleted = true;
+    file.deletedAt = new Date();
+    file.deletedBy = user._id;
+
+    await event.save();
+
+    res.json({ message: "File moved to trash" });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Delete failed" });
+  }
+});
+
+router.get("/admin/trash", auth, permit("admin"), async (req, res) => {
+  try {
+    const events = await Event.find({
+      "attachments.isDeleted": true,
+    })
+      .populate("clubId", "name")
+      .populate("facultyId", "name")
+      .select("name date clubId facultyId attachments");
+
+    const trashed = events.map((event) => {
+      const obj = event.toObject();
+
+      obj.attachments = obj.attachments.filter(
+        (f) => f.isDeleted
+      );
+
+      return obj;
+    });
+
+    res.json(trashed);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.put("/:eventId/file/:fileId/restore", auth, permit("admin"), async (req, res) => {
+  try {
+    const { eventId, fileId } = req.params;
+
+    const event = await Event.findById(eventId);
+    const file = event.attachments.id(fileId);
+
+    if (!file) {
+      return res.status(404).json({ message: "File not found" });
+    }
+
+    file.isDeleted = false;
+    file.deletedAt = null;
+    file.deletedBy = null;
+
+    await event.save();
+
+    res.json({ message: "File restored" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 export default router;
